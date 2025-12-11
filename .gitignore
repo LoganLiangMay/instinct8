@@ -53,9 +53,9 @@ Icon?
 *.bak
 *.swp
 
-# Keep codex/ directory (we're tracking our edits)
-# But ignore codex's own build artifacts
-codex/**/target/
-codex/**/dist/
-codex/**/node_modules/
+# Exclude codex/ directory - it's reference material only
+# Too large to push to GitHub (26+ MB)
+# If needed, can be added back selectively
+# NOTE: Currently included because we need to edit compression files
+# codex/
 
