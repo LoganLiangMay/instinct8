@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.key
+ANTHROPIC_API_KEY
+
+# Results (may contain API responses)
+# Uncomment if you don't want to track results
+# results/*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+Icon?
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# Keep codex/ directory (we're tracking our edits)
+# But ignore codex's own build artifacts
+codex/**/target/
+codex/**/dist/
+codex/**/node_modules/
+

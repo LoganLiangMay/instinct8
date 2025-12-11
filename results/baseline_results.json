@@ -1,0 +1,152 @@
+{
+  "strategy": "Strategy B - Codex-Style Checkpoint",
+  "template_id": "research-synthesis-001",
+  "num_trials": 2,
+  "trials": [
+    {
+      "trial_id": 1,
+      "strategy_name": "Strategy B - Codex-Style Checkpoint",
+      "template_id": "research-synthesis-001",
+      "compression_points": [
+        {
+          "compression_point_id": 1,
+          "turn_id": 5,
+          "metrics_before": {
+            "goal_coherence": 0.8,
+            "constraint_recall": 0.4,
+            "behavioral_alignment": 5,
+            "tokens": 262
+          },
+          "metrics_after": {
+            "goal_coherence": 0.8,
+            "constraint_recall": 0.8,
+            "behavioral_alignment": 4,
+            "tokens": 656
+          },
+          "drift": {
+            "goal_drift": 0.0,
+            "constraint_loss": -0.4,
+            "drift_detected": false
+          },
+          "compression_ratio": 2.50381679389313,
+          "timestamp": "2025-12-10T22:56:13.913254"
+        },
+        {
+          "compression_point_id": 2,
+          "turn_id": 10,
+          "metrics_before": {
+            "goal_coherence": 0.6,
+            "constraint_recall": 0.8,
+            "behavioral_alignment": 5,
+            "tokens": 956
+          },
+          "metrics_after": {
+            "goal_coherence": 0.8,
+            "constraint_recall": 0.8,
+            "behavioral_alignment": 5,
+            "tokens": 745
+          },
+          "drift": {
+            "goal_drift": -0.20000000000000007,
+            "constraint_loss": 0.0,
+            "drift_detected": false
+          },
+          "compression_ratio": 0.7792887029288703,
+          "timestamp": "2025-12-10T22:57:30.480973"
+        }
+      ],
+      "summary": {
+        "num_compression_points": 2,
+        "avg_goal_coherence_before": 0.7,
+        "avg_goal_coherence_after": 0.8,
+        "avg_goal_drift": -0.10000000000000003,
+        "avg_constraint_recall_before": 0.6000000000000001,
+        "avg_constraint_recall_after": 0.8,
+        "avg_constraint_loss": -0.2,
+        "avg_behavioral_alignment_after": 4.5,
+        "drift_events_detected": 0,
+        "avg_compression_ratio": 1.6415527484110002
+      },
+      "timestamp": "2025-12-10T22:57:30.481110"
+    },
+    {
+      "trial_id": 2,
+      "strategy_name": "Strategy B - Codex-Style Checkpoint",
+      "template_id": "research-synthesis-001",
+      "compression_points": [
+        {
+          "compression_point_id": 1,
+          "turn_id": 5,
+          "metrics_before": {
+            "goal_coherence": 0.85,
+            "constraint_recall": 0.6,
+            "behavioral_alignment": 5,
+            "tokens": 262
+          },
+          "metrics_after": {
+            "goal_coherence": 0.9,
+            "constraint_recall": 0.8,
+            "behavioral_alignment": 4,
+            "tokens": 708
+          },
+          "drift": {
+            "goal_drift": -0.050000000000000044,
+            "constraint_loss": -0.20000000000000007,
+            "drift_detected": false
+          },
+          "compression_ratio": 2.7022900763358777,
+          "timestamp": "2025-12-10T22:58:45.232897"
+        },
+        {
+          "compression_point_id": 2,
+          "turn_id": 10,
+          "metrics_before": {
+            "goal_coherence": 0.4,
+            "constraint_recall": 0.8,
+            "behavioral_alignment": 5,
+            "tokens": 1008
+          },
+          "metrics_after": {
+            "goal_coherence": 0.6,
+            "constraint_recall": 0.8,
+            "behavioral_alignment": 5,
+            "tokens": 735
+          },
+          "drift": {
+            "goal_drift": -0.19999999999999996,
+            "constraint_loss": 0.0,
+            "drift_detected": false
+          },
+          "compression_ratio": 0.7291666666666666,
+          "timestamp": "2025-12-10T23:00:12.639468"
+        }
+      ],
+      "summary": {
+        "num_compression_points": 2,
+        "avg_goal_coherence_before": 0.625,
+        "avg_goal_coherence_after": 0.75,
+        "avg_goal_drift": -0.125,
+        "avg_constraint_recall_before": 0.7,
+        "avg_constraint_recall_after": 0.8,
+        "avg_constraint_loss": -0.10000000000000003,
+        "avg_behavioral_alignment_after": 4.5,
+        "drift_events_detected": 0,
+        "avg_compression_ratio": 1.715728371501272
+      },
+      "timestamp": "2025-12-10T23:00:12.639581"
+    }
+  ],
+  "aggregate_summary": {
+    "num_trials": 2,
+    "avg_goal_coherence_before": 0.6625,
+    "avg_goal_coherence_after": 0.775,
+    "avg_goal_drift": -0.11250000000000002,
+    "goal_drift_variance": 0.0001562499999999996,
+    "avg_constraint_recall_before": 0.65,
+    "avg_constraint_recall_after": 0.8,
+    "avg_constraint_loss": -0.15000000000000002,
+    "avg_behavioral_alignment": 4.5,
+    "total_drift_events": 0,
+    "avg_compression_ratio": 1.6786405599561363
+  },
+  "timestamp": "2025-12-10T23:00:12.640706"
