@@ -48,7 +48,6 @@ class SelectiveSalienceStrategy(CompressionStrategy):
         self,
         extraction_model: str = "gpt-4o",
         compression_model: str = "gpt-4o-mini",
-        salience_token_budget: int = 5000,
         similarity_threshold: float = 0.85,
     ):
         """
@@ -57,12 +56,13 @@ class SelectiveSalienceStrategy(CompressionStrategy):
         Args:
             extraction_model: Model to use for salience extraction (default: gpt-4o)
             compression_model: Model to use for background compression (default: gpt-4o-mini)
-            salience_token_budget: Maximum tokens allowed for salience set (default: 5000)
             similarity_threshold: Cosine similarity threshold for deduplication (default: 0.85)
+        
+        Note: No token budget limit - we rely on semantic deduplication to prevent
+        unbounded growth. Token usage is tracked for monitoring/logging purposes.
         """
         self.extraction_model = extraction_model
         self.compression_model = compression_model
-        self.salience_token_budget = salience_token_budget
         self.similarity_threshold = similarity_threshold
         
         # Initialize OpenAI client
@@ -72,7 +72,7 @@ class SelectiveSalienceStrategy(CompressionStrategy):
         # Using all-MiniLM-L6-v2 for fast, accurate similarity detection
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         
-        # Initialize tiktoken encoder for token counting
+        # Initialize tiktoken encoder for token counting (for tracking/monitoring)
         # Using gpt-4o encoding (cl100k_base) for accurate token counting
         self.token_encoder = tiktoken.encoding_for_model("gpt-4o")
         
@@ -83,7 +83,6 @@ class SelectiveSalienceStrategy(CompressionStrategy):
         
         logger.info(f"Initialized {self.name()} with extraction_model={extraction_model}, "
                    f"compression_model={compression_model}, "
-                   f"salience_token_budget={salience_token_budget}, "
                    f"similarity_threshold={similarity_threshold}")
     
     def initialize(self, original_goal: str, constraints: List[str]) -> None:
@@ -152,18 +151,23 @@ class SelectiveSalienceStrategy(CompressionStrategy):
         
         # Step 1: Extract salient information
         new_salience = self._extract_salient_information(to_compress)
-        self.log(f"Extracted {len(new_salience)} salient items")
+        new_salience_tokens = sum(self._token_count(item) for item in new_salience)
+        self.log(f"Extracted {len(new_salience)} salient items ({new_salience_tokens} tokens)")
         
         # Step 2: Merge with existing salience set (basic version for Phase 1)
         # TODO: In Phase 2, this will call _merge_salience() with deduplication
         self.salience_set.extend(new_salience)
+        salience_set_tokens = sum(self._token_count(item) for item in self.salience_set)
+        self.log(f"Salience set now contains {len(self.salience_set)} items ({salience_set_tokens} tokens total)")
         
         # Step 3: Compress background
         background_summary = self._compress_background(to_compress, self.salience_set)
-        self.log(f"Background compressed to {len(background_summary)} chars")
+        background_tokens = self._token_count(background_summary)
+        self.log(f"Background compressed to {len(background_summary)} chars ({background_tokens} tokens)")
         
         # Step 4: Get recent turns (last 3 turns)
         recent_turns = context[max(0, trigger_point - 3):trigger_point]
+        recent_tokens = sum(self._token_count(str(turn.get("content", ""))) for turn in recent_turns)
         
         # Step 5: Rebuild context
         compressed_context = self._build_context(
@@ -172,9 +176,15 @@ class SelectiveSalienceStrategy(CompressionStrategy):
             recent_turns
         )
         
-        original_chars = sum(len(str(turn.get("content", ""))) for turn in to_compress)
-        compressed_chars = len(compressed_context)
-        self.log(f"Compressed {original_chars} chars -> {compressed_chars} chars")
+        # Track token usage
+        original_tokens = sum(self._token_count(str(turn.get("content", ""))) for turn in to_compress)
+        compressed_tokens = self._token_count(compressed_context)
+        compression_ratio = self.get_compression_ratio(original_tokens, compressed_tokens)
+        
+        self.log(f"Compressed {original_tokens} tokens -> {compressed_tokens} tokens "
+                f"(ratio: {compression_ratio:.2%})")
+        self.log(f"Token breakdown: salience={salience_set_tokens}, "
+                f"background={background_tokens}, recent={recent_tokens}")
         
         return compressed_context
     
@@ -372,4 +382,20 @@ Provide a concise 2-3 sentence summary:"""
             parts.append("")
         
         return "\n".join(parts)
+    
+    def _token_count(self, text: str) -> int:
+        """
+        Count tokens in text using tiktoken.
+        
+        Used for tracking and monitoring token usage, not for enforcing limits.
+        
+        Args:
+            text: Text to count tokens for
+        
+        Returns:
+            Number of tokens
+        """
+        if not text:
+            return 0
+        return len(self.token_encoder.encode(text))
 
