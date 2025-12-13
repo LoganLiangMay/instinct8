@@ -70,7 +70,9 @@ class CodexCLIWrapper:
             working_dir: Working directory for Codex (temp dir if None)
             timeout: Default timeout in seconds for commands
         """
-        self.codex_path = codex_path or self._find_codex()
+        # Resolve to absolute path to ensure it works from any cwd
+        resolved_path = codex_path or self._find_codex()
+        self.codex_path = os.path.abspath(resolved_path)
         self.timeout = timeout
         self._working_dir = working_dir
         self._temp_dir: Optional[tempfile.TemporaryDirectory] = None
@@ -146,15 +148,17 @@ class CodexCLIWrapper:
         self,
         prompt: str,
         timeout: Optional[int] = None,
-        quiet: bool = True,
+        json_output: bool = False,
+        skip_git_check: bool = True,
     ) -> CodexResponse:
         """
-        Run a prompt through Codex CLI.
+        Run a prompt through Codex CLI using the exec subcommand.
 
         Args:
             prompt: The prompt to send to Codex
             timeout: Timeout in seconds (uses default if None)
-            quiet: Run in quiet mode (less output)
+            json_output: Return JSONL output for structured parsing
+            skip_git_check: Skip git repository check (useful for temp dirs)
 
         Returns:
             CodexResponse with output and metadata
@@ -162,13 +166,17 @@ class CodexCLIWrapper:
         timeout = timeout or self.timeout
         start_time = datetime.now()
 
-        # Build command
-        cmd = [self.codex_path]
-        if quiet:
-            cmd.append("--quiet")
+        # Build command using exec subcommand for non-interactive mode
+        cmd = [self.codex_path, "exec"]
 
-        # Add the prompt
-        cmd.extend(["--prompt", prompt])
+        if skip_git_check:
+            cmd.append("--skip-git-repo-check")
+
+        if json_output:
+            cmd.append("--json")
+
+        # Add the prompt as positional argument
+        cmd.append(prompt)
 
         try:
             result = subprocess.run(

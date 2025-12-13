@@ -43,8 +43,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Add project to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path (scripts/ is one level down)
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from evaluation import (
     # Core evaluation
@@ -110,10 +111,10 @@ def run_evaluation(
     """Run evaluation and save results."""
 
     # Load dataset
-    dataset_path = "A-mem/LoCoMo.json"
-    if not os.path.exists(dataset_path):
+    dataset_path = project_root / "data" / "A-mem" / "LoCoMo.json"
+    if not dataset_path.exists():
         print(f"Error: Dataset not found at {dataset_path}")
-        print("Please ensure LoCoMo.json is in the A-mem/ directory")
+        print("Please ensure LoCoMo.json is in the data/A-mem/ directory")
         return None
 
     # Calculate ratio based on sample count
@@ -181,8 +182,8 @@ def run_coding_evaluation(
     """Run coding task evaluation and save results."""
 
     # Load coding dataset
-    coding_path = "templates/coding/"
-    if not os.path.exists(coding_path):
+    coding_path = project_root / "templates" / "coding"
+    if not coding_path.exists():
         print(f"Error: Coding templates not found at {coding_path}")
         return None
 
@@ -380,8 +381,8 @@ def run_ablations(
         print("=" * 60)
 
     # Load dataset
-    dataset_path = "A-mem/LoCoMo.json"
-    dataset = LoCoMoDataset(dataset_path, ratio=1.0)
+    dataset_path = project_root / "data" / "A-mem" / "LoCoMo.json"
+    dataset = LoCoMoDataset(str(dataset_path), ratio=1.0)
     total_samples = len(list(dataset))
     ratio = min(1.0, samples / total_samples) if samples else 0.1
     dataset = LoCoMoDataset(dataset_path, ratio=ratio)

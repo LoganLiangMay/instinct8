@@ -24,8 +24,8 @@ import sys
 import argparse
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent
+# Add project root to path (scripts/ is one level down)
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from evaluation.locomo_eval import (
@@ -42,7 +42,7 @@ def main():
     parser.add_argument(
         "--dataset",
         type=str,
-        default=str(project_root / "A-mem" / "data" / "locomo10.json"),
+        default=str(project_root / "data" / "A-mem" / "data" / "locomo10.json"),
         help="Path to LoCoMo dataset JSON"
     )
     parser.add_argument(

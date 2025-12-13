@@ -140,6 +140,19 @@ from .codex_cli_wrapper import (
     get_codex_version,
 )
 
+# Hierarchical metrics (new)
+from .hierarchical_metrics import (
+    HierarchicalMetrics,
+    HierarchicalMetricsCalculator,
+    ProbeResult,
+    BehavioralTestResult,
+    load_hierarchical_template,
+    format_hierarchical_report,
+    measure_element_recall,
+    measure_depth_precision,
+    measure_reasoning_fidelity,
+)
+
 __all__ = [
     # Original exports
     "measure_goal_coherence",
@@ -240,5 +253,15 @@ __all__ = [
     "CodexSession",
     "find_codex",
     "get_codex_version",
+    # Hierarchical metrics
+    "HierarchicalMetrics",
+    "HierarchicalMetricsCalculator",
+    "ProbeResult",
+    "BehavioralTestResult",
+    "load_hierarchical_template",
+    "format_hierarchical_report",
+    "measure_element_recall",
+    "measure_depth_precision",
+    "measure_reasoning_fidelity",
 ]
 

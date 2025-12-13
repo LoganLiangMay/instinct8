@@ -35,8 +35,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path (scripts/ is one level down)
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from evaluation import (
     # Harness and datasets
@@ -333,7 +334,7 @@ def main():
     parser.add_argument(
         "--dataset-path",
         type=str,
-        default="A-mem/LoCoMo.json",
+        default=str(project_root / "data" / "A-mem" / "LoCoMo.json"),
         help="Path to dataset file",
     )
     parser.add_argument(

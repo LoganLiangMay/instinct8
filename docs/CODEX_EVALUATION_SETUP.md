@@ -22,14 +22,23 @@ instinct8/main/                        # BASELINE + EVALUATION FRAMEWORK
 │       └── target/release/codex       # Your modified binary
 │
 ├── evaluation/                        # Python evaluation framework
-├── templates/coding/                  # Coding task definitions
-├── A-mem/                             # LoCoMo QA dataset
+├── strategies/                        # Compression strategy implementations
+├── templates/                         # Test templates
+│   └── coding/                        # Coding task definitions
+├── data/                              # External datasets
+│   └── A-mem/                         # LoCoMo QA dataset
+├── docs/                              # Documentation
+├── results/                           # Evaluation results
 │
-├── run_comparison_eval.py             # Compare baseline vs modified
-├── run_codex_cli_eval.py              # Evaluate single Codex version
-├── run_eval.py                        # General evaluation runner
-├── run_locomo_eval.py                 # LoCoMo QA evaluation
-└── run_rigorous_eval.py               # Statistical rigor evaluation
+├── scripts/                           # Evaluation entry points
+│   ├── run_comparison_eval.py         # Compare baseline vs modified
+│   ├── run_codex_cli_eval.py          # Evaluate single Codex version
+│   ├── run_eval.py                    # General evaluation runner
+│   ├── run_locomo_eval.py             # LoCoMo QA evaluation
+│   └── run_rigorous_eval.py           # Statistical rigor evaluation
+│
+├── requirements.txt                   # Python dependencies
+└── README.md                          # Project overview
 ```
 
 **Custom naming:** You can name your modified Codex directory anything:
@@ -103,7 +112,7 @@ Verify:
 ### Build Both at Once
 
 ```bash
-python run_comparison_eval.py --build-all
+python scripts/run_comparison_eval.py --build-all
 ```
 
 ---
@@ -115,7 +124,7 @@ python run_comparison_eval.py --build-all
 Test the framework works with simulation mode:
 
 ```bash
-python run_eval.py --dataset coding --samples 1
+python scripts/run_eval.py --dataset coding --samples 1
 ```
 
 Expected output:
@@ -135,20 +144,20 @@ Test long-context question answering:
 
 ```bash
 # Quick test (10% of dataset)
-python run_locomo_eval.py --ratio 0.1
+python scripts/run_locomo_eval.py --ratio 0.1
 
 # Full evaluation
-python run_locomo_eval.py --ratio 1.0
+python scripts/run_locomo_eval.py --ratio 1.0
 ```
 
 ### 3. Coding Task Evaluation
 
 ```bash
 # Single sample
-python run_eval.py --dataset coding --samples 1
+python scripts/run_eval.py --dataset coding --samples 1
 
 # All coding tasks
-python run_eval.py --dataset coding
+python scripts/run_eval.py --dataset coding
 ```
 
 ### 4. Compare Baseline vs Your Modified Codex
@@ -157,13 +166,13 @@ This is the main evaluation for testing your compaction changes:
 
 ```bash
 # Compare (both binaries must be built)
-python run_comparison_eval.py --verbose
+python scripts/run_comparison_eval.py --verbose
 
 # Build and compare in one command
-python run_comparison_eval.py --build-all --verbose
+python scripts/run_comparison_eval.py --build-all --verbose
 
 # Save results to file
-python run_comparison_eval.py --verbose --output results/my_comparison.json
+python scripts/run_comparison_eval.py --verbose --output results/my_comparison.json
 ```
 
 Expected output:
@@ -201,10 +210,10 @@ For publication-quality results with confidence intervals:
 
 ```bash
 # Multiple runs per sample
-python run_rigorous_eval.py --dataset locomo --n-runs 5 --ratio 0.1
+python scripts/run_rigorous_eval.py --dataset locomo --n-runs 5 --ratio 0.1
 
 # With ablation studies
-python run_rigorous_eval.py --dataset locomo --n-runs 3 --ablations
+python scripts/run_rigorous_eval.py --dataset locomo --n-runs 3 --ablations
 ```
 
 ---
@@ -226,16 +235,16 @@ echo "=== 1. Testing Imports ==="
 python -c "from evaluation import CodexCLIWrapper, UnifiedHarness; print('OK')"
 
 echo "=== 2. Coding Evaluation (1 sample) ==="
-python run_eval.py --dataset coding --samples 1
+python scripts/run_eval.py --dataset coding --samples 1
 
 echo "=== 3. LoCoMo Evaluation (10%) ==="
-python run_locomo_eval.py --ratio 0.1
+python scripts/run_locomo_eval.py --ratio 0.1
 
 echo "=== 4. Building Codex Binaries ==="
-python run_comparison_eval.py --build-all
+python scripts/run_comparison_eval.py --build-all
 
 echo "=== 5. Comparison Evaluation ==="
-python run_comparison_eval.py --verbose --output results/full_comparison.json
+python scripts/run_comparison_eval.py --verbose --output results/full_comparison.json
 
 echo "=== ALL TESTS PASSED ==="
 ```
@@ -259,7 +268,7 @@ cargo build --release
 
 # Run comparison (no --name needed for default)
 cd ..
-python run_comparison_eval.py --verbose
+python scripts/run_comparison_eval.py --verbose
 ```
 
 ### Option B: Custom Named Version
@@ -277,7 +286,7 @@ cargo build --release
 
 # Run comparison with --name flag
 cd ..
-python run_comparison_eval.py --name graphrag --verbose
+python scripts/run_comparison_eval.py --name graphrag --verbose
 ```
 
 ### Option C: Multiple Versions
@@ -294,9 +303,9 @@ instinct8/main/
 
 Compare each version:
 ```bash
-python run_comparison_eval.py --name experimental --verbose
-python run_comparison_eval.py --name graphrag --verbose
-python run_comparison_eval.py --name semantic --verbose
+python scripts/run_comparison_eval.py --name experimental --verbose
+python scripts/run_comparison_eval.py --name graphrag --verbose
+python scripts/run_comparison_eval.py --name semantic --verbose
 ```
 
 ---
@@ -381,17 +390,17 @@ Create JSON files in `templates/coding/`:
 
 | Command | Description |
 |---------|-------------|
-| `python run_comparison_eval.py` | Compare baseline vs codex-experimental/ |
-| `python run_comparison_eval.py --name graphrag` | Compare baseline vs codex-graphrag/ |
-| `python run_comparison_eval.py --build-all` | Build both, then compare |
-| `python run_comparison_eval.py --build-all --name graphrag` | Build and compare named version |
-| `python run_comparison_eval.py --modified /path/to/codex` | Use explicit binary path |
-| `python run_codex_cli_eval.py` | Evaluate single Codex binary |
-| `python run_codex_cli_eval.py --codex-path /path/to/codex` | Evaluate specific binary |
-| `python run_eval.py --dataset coding` | Run coding task evaluation |
-| `python run_eval.py --dataset locomo` | Run LoCoMo QA evaluation |
-| `python run_locomo_eval.py --ratio 0.1` | Quick LoCoMo test (10%) |
-| `python run_rigorous_eval.py --n-runs 5` | Statistical evaluation |
+| `python scripts/run_comparison_eval.py` | Compare baseline vs codex-experimental/ |
+| `python scripts/run_comparison_eval.py --name graphrag` | Compare baseline vs codex-graphrag/ |
+| `python scripts/run_comparison_eval.py --build-all` | Build both, then compare |
+| `python scripts/run_comparison_eval.py --build-all --name graphrag` | Build and compare named version |
+| `python scripts/run_comparison_eval.py --modified /path/to/codex` | Use explicit binary path |
+| `python scripts/run_codex_cli_eval.py` | Evaluate single Codex binary |
+| `python scripts/run_codex_cli_eval.py --codex-path /path/to/codex` | Evaluate specific binary |
+| `python scripts/run_eval.py --dataset coding` | Run coding task evaluation |
+| `python scripts/run_eval.py --dataset locomo` | Run LoCoMo QA evaluation |
+| `python scripts/run_locomo_eval.py --ratio 0.1` | Quick LoCoMo test (10%) |
+| `python scripts/run_rigorous_eval.py --n-runs 5` | Statistical evaluation |
 
 ---
 
@@ -467,7 +476,7 @@ export OPENAI_API_KEY="sk-your-key-here"
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  4. EVALUATE                                                 │
-│     python run_comparison_eval.py --verbose                 │
+│     python scripts/run_comparison_eval.py --verbose                 │
 │     (or: --name <version> for custom named versions)        │
 └─────────────────────────────────────────────────────────────┘
                             │

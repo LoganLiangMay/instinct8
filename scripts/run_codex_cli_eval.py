@@ -47,8 +47,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path (scripts/ is one level down)
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from evaluation.codex_cli_wrapper import (
     CodexCLIWrapper,
