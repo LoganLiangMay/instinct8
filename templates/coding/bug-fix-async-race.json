@@ -1,0 +1,163 @@
+{
+  "task_id": "bug-fix-async-001",
+  "task_type": "bug_fixing",
+  "specification": {
+    "goal": "Fix a race condition in async task queue processing",
+    "requirements": [
+      "Identify the race condition in the task queue",
+      "Fix concurrent access to shared state",
+      "Ensure tasks are processed exactly once",
+      "Maintain task ordering guarantees"
+    ],
+    "constraints": [
+      "Use asyncio primitives (Lock, Semaphore)",
+      "Do not change the public API",
+      "Maintain backwards compatibility",
+      "Keep the fix minimal and focused"
+    ],
+    "context": "Production system experiencing duplicate task processing under high load. Some tasks are being executed multiple times while others are skipped."
+  },
+  "ground_truth": {
+    "expected_code": "# Fixed version with proper locking",
+    "test_cases": [
+      {
+        "name": "test_no_duplicate_processing",
+        "input": "Submit 100 tasks concurrently",
+        "expected_output": "Each task processed exactly once",
+        "description": "Tasks should not be processed multiple times"
+      },
+      {
+        "name": "test_no_task_skipping",
+        "input": "Submit 100 tasks with high concurrency",
+        "expected_output": "All 100 tasks completed",
+        "description": "No tasks should be skipped"
+      },
+      {
+        "name": "test_ordering_preserved",
+        "input": "Submit ordered tasks",
+        "expected_output": "Tasks completed in submission order",
+        "description": "FIFO ordering should be maintained"
+      }
+    ],
+    "acceptance_criteria": [
+      "Race condition is eliminated",
+      "No duplicate task execution",
+      "No task starvation",
+      "Performance impact is minimal (<10% overhead)"
+    ]
+  },
+  "initial_files": {
+    "task_queue.py": "import asyncio\nfrom typing import Any, Callable, List\n\nclass AsyncTaskQueue:\n    def __init__(self, max_workers: int = 5):\n        self.queue: List[Any] = []\n        self.processing: set = set()\n        self.max_workers = max_workers\n        self.workers_running = 0\n    \n    async def submit(self, task_id: str, coro: Callable):\n        self.queue.append((task_id, coro))\n        if self.workers_running < self.max_workers:\n            asyncio.create_task(self._worker())\n    \n    async def _worker(self):\n        self.workers_running += 1\n        while self.queue:\n            task_id, coro = self.queue.pop(0)  # BUG: Not thread-safe\n            if task_id in self.processing:  # BUG: Check-then-act race\n                continue\n            self.processing.add(task_id)\n            try:\n                await coro()\n            finally:\n                self.processing.remove(task_id)\n        self.workers_running -= 1"
+  },
+  "conversation": [
+    {
+      "turn_id": 1,
+      "role": "user",
+      "content": "We're seeing duplicate task processing in production. Multiple workers seem to pick up the same task. Can you investigate?"
+    },
+    {
+      "turn_id": 2,
+      "role": "assistant",
+      "content": "I'll examine the task queue implementation to identify the race condition.",
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": "task_queue.py",
+          "output": "import asyncio\nfrom typing import Any, Callable, List\n\nclass AsyncTaskQueue:\n    def __init__(self, max_workers: int = 5):\n        self.queue: List[Any] = []\n        self.processing: set = set()\n        self.max_workers = max_workers\n        self.workers_running = 0\n    \n    async def submit(self, task_id: str, coro: Callable):\n        self.queue.append((task_id, coro))\n        if self.workers_running < self.max_workers:\n            asyncio.create_task(self._worker())\n    \n    async def _worker(self):\n        self.workers_running += 1\n        while self.queue:\n            task_id, coro = self.queue.pop(0)\n            if task_id in self.processing:\n                continue\n            self.processing.add(task_id)\n            try:\n                await coro()\n            finally:\n                self.processing.remove(task_id)\n        self.workers_running -= 1"
+        }
+      ]
+    },
+    {
+      "turn_id": 3,
+      "role": "assistant",
+      "content": "I've identified multiple race conditions in this code:\n\n1. **queue.pop(0) race**: Multiple workers can pop from the queue simultaneously between await points\n2. **Check-then-act on processing set**: Between checking `if task_id in self.processing` and `self.processing.add(task_id)`, another worker can pass the same check\n3. **workers_running counter**: Incrementing/decrementing isn't atomic\n\nLet me create a test to reproduce the issue first."
+    },
+    {
+      "turn_id": 4,
+      "role": "assistant",
+      "content": "Creating a test to demonstrate the race condition.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "test_race.py",
+          "output": "File created successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 5,
+      "role": "assistant",
+      "content": "Running the test to confirm the race condition.",
+      "tool_calls": [
+        {
+          "name": "shell",
+          "input": "python test_race.py",
+          "output": "FAIL: Expected 100 tasks, got 87 unique executions with 13 duplicates"
+        }
+      ]
+    },
+    {
+      "turn_id": 6,
+      "role": "user",
+      "content": "Yes, that's exactly what we're seeing. How do we fix it?"
+    },
+    {
+      "turn_id": 7,
+      "role": "assistant",
+      "content": "I'll fix this using asyncio.Lock for the critical sections. The key is to make the check-and-pop operation atomic.",
+      "is_compression_point": true
+    },
+    {
+      "turn_id": 8,
+      "role": "assistant",
+      "content": "Implementing the fix with proper locking.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "task_queue.py",
+          "output": "File updated successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 9,
+      "role": "assistant",
+      "content": "Running the test again to verify the fix.",
+      "tool_calls": [
+        {
+          "name": "shell",
+          "input": "python test_race.py",
+          "output": "PASS: All 100 tasks executed exactly once"
+        }
+      ]
+    },
+    {
+      "turn_id": 10,
+      "role": "user",
+      "content": "Great! Can you also add a stress test with higher concurrency?"
+    },
+    {
+      "turn_id": 11,
+      "role": "assistant",
+      "content": "Adding a stress test with 1000 tasks and 50 workers.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "test_stress.py",
+          "output": "File created successfully"
+        },
+        {
+          "name": "shell",
+          "input": "python test_stress.py",
+          "output": "PASS: 1000/1000 tasks completed, 0 duplicates, avg latency 2.3ms"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "difficulty": "advanced",
+    "estimated_turns": 12,
+    "domains": ["concurrency", "async", "debugging"],
+    "bug_type": "race_condition"
+  }
+}

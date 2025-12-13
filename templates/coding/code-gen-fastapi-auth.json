@@ -1,0 +1,316 @@
+{
+  "task_id": "code-gen-fastapi-001",
+  "task_type": "code_generation",
+  "specification": {
+    "goal": "Create a FastAPI authentication endpoint with JWT token support",
+    "requirements": [
+      "POST /auth/login endpoint accepting username and password",
+      "POST /auth/register endpoint for user registration",
+      "JWT token generation with configurable expiration",
+      "Password hashing using bcrypt",
+      "Pydantic models for request/response validation"
+    ],
+    "constraints": [
+      "Use FastAPI framework",
+      "Use pydantic for data validation",
+      "Use python-jose for JWT handling",
+      "Use passlib with bcrypt for password hashing",
+      "Include proper error handling with HTTPException",
+      "Add docstrings for all functions"
+    ],
+    "context": "Building a REST API backend that needs secure user authentication. The system will be deployed in a production environment."
+  },
+  "ground_truth": {
+    "expected_files": {
+      "auth/routes.py": "# FastAPI auth routes implementation",
+      "auth/models.py": "# Pydantic models for auth",
+      "auth/security.py": "# JWT and password utilities"
+    },
+    "test_cases": [
+      {
+        "name": "test_register_success",
+        "input": "POST /auth/register with valid credentials",
+        "expected_output": "201 Created with user data",
+        "description": "User registration should succeed with valid input"
+      },
+      {
+        "name": "test_login_success",
+        "input": "POST /auth/login with valid credentials",
+        "expected_output": "200 OK with access_token and token_type",
+        "description": "Login should return JWT token for valid credentials"
+      },
+      {
+        "name": "test_login_invalid_password",
+        "input": "POST /auth/login with wrong password",
+        "expected_output": "401 Unauthorized",
+        "description": "Login should fail with invalid password"
+      },
+      {
+        "name": "test_jwt_validation",
+        "input": "Token with valid signature",
+        "expected_output": "Token decoded successfully",
+        "description": "Valid JWT tokens should decode correctly"
+      }
+    ],
+    "acceptance_criteria": [
+      "JWT tokens are properly signed with secret key",
+      "Passwords are hashed before storage (never plain text)",
+      "Token expiration is configurable",
+      "Invalid credentials return 401 status",
+      "All endpoints have proper input validation"
+    ]
+  },
+  "initial_files": {
+    "main.py": "from fastapi import FastAPI\n\napp = FastAPI(title=\"Auth API\")\n\n# TODO: Add auth routes",
+    "requirements.txt": "fastapi>=0.100.0\nuvicorn>=0.22.0\npython-jose[cryptography]>=3.3.0\npasslib[bcrypt]>=1.7.4\npydantic>=2.0.0"
+  },
+  "compression_triggers": {
+    "token_threshold": 80000,
+    "turn_count": 20
+  },
+  "conversation": [
+    {
+      "turn_id": 1,
+      "role": "user",
+      "content": "I need to implement a secure authentication system for my FastAPI application. It should support user registration and login with JWT tokens."
+    },
+    {
+      "turn_id": 2,
+      "role": "assistant",
+      "content": "I'll help you create a secure authentication system with FastAPI. Let me start by examining the current project structure.",
+      "tool_calls": [
+        {
+          "name": "shell",
+          "input": "ls -la",
+          "output": "main.py\nrequirements.txt"
+        }
+      ]
+    },
+    {
+      "turn_id": 3,
+      "role": "assistant",
+      "content": "I see we have a basic FastAPI setup. Let me check the current main.py.",
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": "main.py",
+          "output": "from fastapi import FastAPI\n\napp = FastAPI(title=\"Auth API\")\n\n# TODO: Add auth routes"
+        }
+      ]
+    },
+    {
+      "turn_id": 4,
+      "role": "assistant",
+      "content": "Good, we have a basic FastAPI app. Now let me create the authentication module structure. I'll start with the security utilities for password hashing and JWT handling.",
+      "tool_calls": [
+        {
+          "name": "shell",
+          "input": "mkdir -p auth",
+          "output": ""
+        }
+      ]
+    },
+    {
+      "turn_id": 5,
+      "role": "assistant",
+      "content": "Creating the security module with password hashing and JWT utilities.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "auth/security.py",
+          "output": "File created successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 6,
+      "role": "user",
+      "content": "Make sure the JWT token includes the user's role for authorization purposes."
+    },
+    {
+      "turn_id": 7,
+      "role": "assistant",
+      "content": "Good point! I'll update the JWT payload to include the user's role. This will allow for role-based access control later."
+    },
+    {
+      "turn_id": 8,
+      "role": "assistant",
+      "content": "Now let me create the Pydantic models for request and response validation.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "auth/models.py",
+          "output": "File created successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 9,
+      "role": "assistant",
+      "content": "Creating the auth routes with login and register endpoints.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "auth/routes.py",
+          "output": "File created successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 10,
+      "role": "user",
+      "content": "Can you also add token refresh functionality?"
+    },
+    {
+      "turn_id": 11,
+      "role": "assistant",
+      "content": "Absolutely! I'll add a refresh token endpoint that allows users to get a new access token without re-authenticating.",
+      "is_compression_point": true
+    },
+    {
+      "turn_id": 12,
+      "role": "assistant",
+      "content": "Adding the refresh token endpoint to the routes.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "auth/routes.py",
+          "output": "File updated successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 13,
+      "role": "user",
+      "content": "Let's also add email verification for new registrations."
+    },
+    {
+      "turn_id": 14,
+      "role": "assistant",
+      "content": "I'll implement email verification. This will require generating a verification token during registration and a new endpoint to verify the email.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "auth/email.py",
+          "output": "File created successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 15,
+      "role": "user",
+      "content": "What about rate limiting to prevent brute force attacks?"
+    },
+    {
+      "turn_id": 16,
+      "role": "assistant",
+      "content": "Great security consideration! I'll add rate limiting to the login endpoint using slowapi.",
+      "tool_calls": [
+        {
+          "name": "shell",
+          "input": "pip install slowapi",
+          "output": "Successfully installed slowapi"
+        }
+      ]
+    },
+    {
+      "turn_id": 17,
+      "role": "assistant",
+      "content": "Implementing rate limiting on the authentication endpoints.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "auth/rate_limit.py",
+          "output": "File created successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 18,
+      "role": "user",
+      "content": "Now let's add some tests for all these endpoints."
+    },
+    {
+      "turn_id": 19,
+      "role": "assistant",
+      "content": "I'll create comprehensive tests for the authentication system using pytest and httpx.",
+      "tool_calls": [
+        {
+          "name": "shell",
+          "input": "mkdir -p tests",
+          "output": ""
+        },
+        {
+          "name": "write_file",
+          "input": "tests/test_auth.py",
+          "output": "File created successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 20,
+      "role": "assistant",
+      "content": "Running the tests to verify everything works correctly.",
+      "tool_calls": [
+        {
+          "name": "shell",
+          "input": "pytest tests/test_auth.py -v",
+          "output": "===== 8 passed in 2.34s ====="
+        }
+      ],
+      "is_compression_point": true
+    },
+    {
+      "turn_id": 21,
+      "role": "user",
+      "content": "Perfect! Can you also add password reset functionality?"
+    },
+    {
+      "turn_id": 22,
+      "role": "assistant",
+      "content": "I'll implement password reset with email-based verification. This will include a 'forgot password' endpoint and a 'reset password' endpoint.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "auth/password_reset.py",
+          "output": "File created successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 23,
+      "role": "assistant",
+      "content": "Updating the routes to include password reset endpoints.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "auth/routes.py",
+          "output": "File updated successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 24,
+      "role": "user",
+      "content": "Let's finalize by updating the main.py to include all routes and document the API."
+    },
+    {
+      "turn_id": 25,
+      "role": "assistant",
+      "content": "I'll update main.py to include all auth routes and add OpenAPI documentation.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "main.py",
+          "output": "File updated successfully"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_turns": 25,
+    "domains": ["authentication", "security", "REST API"],
+    "frameworks": ["FastAPI", "Pydantic"]
+  }
+}
