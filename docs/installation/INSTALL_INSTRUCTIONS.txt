@@ -1,0 +1,51 @@
+INSTINCT8 AGENT - INSTALLATION INSTRUCTIONS
+===========================================
+
+QUICK INSTALL (3 steps):
+------------------------
+
+1. Install from PyPI:
+   pip install instinct8-agent
+
+2. Set your OpenAI API key:
+   export OPENAI_API_KEY="your-api-key-here"
+
+3. Test it:
+   instinct8 "Hello, what can you do?"
+
+
+USE AS CODEX REPLACEMENT:
+--------------------------
+
+Alias Instinct8 to replace Codex:
+  alias codex=instinct8
+
+Now use Codex commands - they'll use Instinct8:
+  codex exec "create a FastAPI endpoint"
+
+
+REQUIREMENTS:
+-------------
+
+- Python 3.9+
+- OpenAI API key
+- Git (for cloning)
+
+
+FOR DETAILED INSTRUCTIONS:
+---------------------------
+
+See INSTALLATION_GUIDE.md for:
+- Step-by-step installation
+- Configuration options
+- Troubleshooting
+- Usage examples
+- Python API usage
+
+
+NEED HELP?
+----------
+
+- Check INSTALLATION_GUIDE.md
+- See QUICKSTART.md for examples
+- Open an issue on GitHub

@@ -32,10 +32,11 @@ from pathlib import Path
 from openai import OpenAI
 
 from strategies.strategy_base import CompressionStrategy
-from strategies.strategy_b_codex import StrategyB_CodexCheckpoint
-from strategies.strategy_h_selective_salience import SelectiveSalienceStrategy
 from evaluation.metrics import MetricsCollector
 from evaluation.goal_tracking import track_goal_evolution
+
+# Strategy imports moved to function level to avoid circular imports
+# (strategies import from evaluation.token_budget, which creates a cycle)
 
 
 @dataclass
@@ -329,6 +330,8 @@ def run_single_trial(
             extracted_salience = None
             ground_truth_salience = None
             
+            # Lazy import to avoid circular dependency
+            from strategies.strategy_h_selective_salience import SelectiveSalienceStrategy
             if isinstance(strategy, SelectiveSalienceStrategy):
                 # Get extracted salience from strategy's salience_set
                 extracted_salience = strategy.salience_set.copy() if hasattr(strategy, 'salience_set') else None
@@ -485,6 +488,8 @@ def run_strategy_h_evaluation(
     
     for trial_id in range(1, num_trials + 1):
         # Create fresh strategy instance for each trial
+        # Lazy import to avoid circular dependency
+        from strategies.strategy_h_selective_salience import SelectiveSalienceStrategy
         strategy = SelectiveSalienceStrategy()
         
         result = run_single_trial(strategy, template, trial_id)

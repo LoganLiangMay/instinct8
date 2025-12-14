@@ -12,6 +12,8 @@ from .metrics import (
 )
 
 # Original harness (existing)
+# Note: Importing harness may cause circular imports if strategies are imported first
+# Import directly from evaluation.harness if you encounter issues
 from .harness import (
     run_baseline_evaluation,
     run_single_trial,

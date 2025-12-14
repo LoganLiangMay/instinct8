@@ -48,12 +48,53 @@ codexcode/
 
 ## Quick Start
 
-### Prerequisites
+### Install Instinct8 Agent
+
+**Install from PyPI:**
+```bash
+pip install instinct8-agent
+```
+
+**Set your API key:**
+```bash
+export OPENAI_API_KEY="your-api-key"
+```
+
+**Test it:**
+```bash
+instinct8 "Hello, what can you do?"
+```
+
+**That's it!** You're ready to use Instinct8 Agent.
+
+### Updating
+
+If you already have Instinct8 Agent installed:
 
 ```bash
-pip install anthropic
-export ANTHROPIC_API_KEY="your-api-key"
+pip install --upgrade instinct8-agent
 ```
+
+### Alternative: Install from Source
+
+For development or latest features:
+```bash
+git clone https://github.com/jjjorgenson/instinct8.git
+cd instinct8
+pip install -e .
+```
+
+### Use as Codex Replacement
+
+```bash
+# Alias to replace Codex
+alias codex=instinct8
+
+# Now use Codex commands - they'll use Instinct8!
+codex exec "create a FastAPI endpoint"
+```
+
+**See [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) for complete installation instructions.**
 
 ### Run Baseline Evaluation
 

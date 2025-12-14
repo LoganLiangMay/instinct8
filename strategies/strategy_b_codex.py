@@ -20,7 +20,9 @@ import os
 from typing import Any, Dict, List, Optional, Protocol
 
 from .strategy_base import CompressionStrategy
-from evaluation.token_budget import TokenBudget, should_compact, BUDGET_8K
+
+# Lazy import to avoid circular dependency with evaluation module
+# TokenBudget, should_compact, and BUDGET_8K imported where needed
 
 
 class LLMClient(Protocol):
@@ -151,7 +153,12 @@ class StrategyB_CodexCheckpoint(CompressionStrategy):
         """
         self.client = _create_llm_client(backend=backend, model=model)
         self.system_prompt = system_prompt
-        self.token_budget = token_budget or BUDGET_8K
+        # Lazy import to avoid circular dependency
+        if token_budget is None:
+            from evaluation.token_budget import BUDGET_8K
+            self.token_budget = BUDGET_8K
+        else:
+            self.token_budget = token_budget
         self.original_goal: Optional[str] = None
         self.constraints: List[str] = []
         self.use_goal_preservation = use_goal_preservation
@@ -215,7 +222,8 @@ class StrategyB_CodexCheckpoint(CompressionStrategy):
         reconstructed = self.render_reconstructed_prompt(to_compress)
 
         # Check if we should compress based on token budget
-        from evaluation.token_budget import estimate_tokens
+        # Lazy import to avoid circular dependency
+        from evaluation.token_budget import estimate_tokens, should_compact
         estimated_tokens = estimate_tokens(reconstructed)
         
         if not should_compact(reconstructed, self.token_budget):
