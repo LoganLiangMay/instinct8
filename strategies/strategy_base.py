@@ -108,7 +108,7 @@ class CompressionStrategy(ABC):
     """
     Abstract base class for all compression strategies.
     
-    All 7 strategies implement this interface:
+    All 8 strategies implement this interface:
     - Strategy A: Naive Summarization
     - Strategy B: Codex-Style Checkpoint
     - Strategy C: Hierarchical Summarization
@@ -116,6 +116,7 @@ class CompressionStrategy(ABC):
     - Strategy E: claude-mem-Inspired Observational Memory
     - Strategy F: Protected Core + Goal Re-assertion (Novel)
     - Strategy G: Hybrid (A-MEM + Protected Core)
+    - Strategy H: Selective Salience Compression (Agent-as-Judge)
     """
     
     @abstractmethod
@@ -234,4 +235,5 @@ class CompressionStrategy(ABC):
             result.append(line)
         
         return "\n".join(result)
+
 

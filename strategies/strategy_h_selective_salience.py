@@ -84,6 +84,9 @@ class SelectiveSalienceStrategy(CompressionStrategy):
         logger.info(f"Initialized {self.name()} with extraction_model={extraction_model}, "
                    f"compression_model={compression_model}, "
                    f"similarity_threshold={similarity_threshold}")
+        
+        # Log initialization for debugging
+        self.log(f"Strategy H initialized with models: extraction={extraction_model}, compression={compression_model}")
     
     def initialize(self, original_goal: str, constraints: List[str]) -> None:
         """
@@ -154,13 +157,12 @@ class SelectiveSalienceStrategy(CompressionStrategy):
         new_salience_tokens = sum(self._token_count(item) for item in new_salience)
         self.log(f"Extracted {len(new_salience)} salient items ({new_salience_tokens} tokens)")
         
-        # Step 2: Merge with existing salience set (basic version for Phase 1)
-        # TODO: In Phase 2, this will call _merge_salience() with deduplication
-        self.salience_set.extend(new_salience)
+        # Step 2: Merge with existing salience set (with deduplication)
+        self.salience_set = self._merge_salience(self.salience_set, new_salience)
         salience_set_tokens = sum(self._token_count(item) for item in self.salience_set)
         self.log(f"Salience set now contains {len(self.salience_set)} items ({salience_set_tokens} tokens total)")
         
-        # Step 3: Compress background
+        # Step 3: Compress background (use current salience set for deduplication)
         background_summary = self._compress_background(to_compress, self.salience_set)
         background_tokens = self._token_count(background_summary)
         self.log(f"Background compressed to {len(background_summary)} chars ({background_tokens} tokens)")
@@ -169,9 +171,12 @@ class SelectiveSalienceStrategy(CompressionStrategy):
         recent_turns = context[max(0, trigger_point - 3):trigger_point]
         recent_tokens = sum(self._token_count(str(turn.get("content", ""))) for turn in recent_turns)
         
-        # Step 5: Rebuild context
+        # Step 5: Prioritize salience items (constraints first, then decisions, then facts)
+        prioritized_salience = self._prioritize_items(self.salience_set)
+        
+        # Step 6: Rebuild context
         compressed_context = self._build_context(
-            self.salience_set,
+            prioritized_salience,
             background_summary,
             recent_turns
         )
@@ -270,13 +275,13 @@ Output format (JSON):
         
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON response: {e}")
-            self.log(f"Salience extraction failed: JSON parse error")
-            return []
+            self.log(f"Salience extraction failed: JSON parse error, using fallback")
+            return self._fallback_extract_constraints(context)
         except Exception as e:
             logger.error(f"Salience extraction failed: {e}", exc_info=True)
-            self.log(f"Salience extraction failed: {e}")
-            # Fallback: return empty list (will be handled by _compress_background)
-            return []
+            self.log(f"Salience extraction failed: {e}, using fallback")
+            # Fallback: extract constraints using Protected Core schema
+            return self._fallback_extract_constraints(context)
     
     def _compress_background(
         self, context: List[Dict[str, Any]], salience_set: List[str]
@@ -330,9 +335,11 @@ Provide a concise 2-3 sentence summary:"""
         
         except Exception as e:
             logger.error(f"Background compression failed: {e}", exc_info=True)
-            self.log(f"Background compression failed: {e}")
+            self.log(f"Background compression failed: {e}, using fallback summary")
             # Fallback: return a simple summary
-            return f"Previous conversation context ({len(context)} turns)."
+            fallback_summary = f"Previous conversation context ({len(context)} turns)."
+            logger.info(f"Using fallback summary: {fallback_summary}")
+            return fallback_summary
     
     def _build_context(
         self,
@@ -398,4 +405,200 @@ Provide a concise 2-3 sentence summary:"""
         if not text:
             return 0
         return len(self.token_encoder.encode(text))
+    
+    def _deduplicate_semantically(
+        self, items: List[str], threshold: Optional[float] = None
+    ) -> List[str]:
+        """
+        Remove semantically similar items using sentence embeddings.
+        
+        Uses all-MiniLM-L6-v2 for fast, accurate similarity detection.
+        For duplicate pairs, keeps the shorter item (more concise).
+        
+        Args:
+            items: List of items to deduplicate
+            threshold: Cosine similarity threshold (default: self.similarity_threshold)
+        
+        Returns:
+            Deduplicated list of items
+        """
+        if len(items) <= 1:
+            return items
+        
+        if threshold is None:
+            threshold = self.similarity_threshold
+        
+        try:
+            # Generate embeddings for all items
+            embeddings = self.embedding_model.encode(items, show_progress_bar=False)
+            
+            # Calculate cosine similarity matrix
+            similarity_matrix = cosine_similarity(embeddings)
+            
+            # Find duplicates
+            to_remove = set()
+            for i in range(len(items)):
+                if i in to_remove:
+                    continue
+                for j in range(i + 1, len(items)):
+                    if j in to_remove:
+                        continue
+                    if similarity_matrix[i][j] > threshold:
+                        # Keep shorter item (more concise)
+                        if len(items[i]) > len(items[j]):
+                            to_remove.add(i)
+                        else:
+                            to_remove.add(j)
+            
+            deduplicated = [item for idx, item in enumerate(items) if idx not in to_remove]
+            
+            if len(to_remove) > 0:
+                self.log(f"Deduplicated {len(items)} items -> {len(deduplicated)} items "
+                        f"(removed {len(to_remove)} duplicates)")
+            
+            return deduplicated
+        
+        except Exception as e:
+            logger.error(f"Semantic deduplication failed: {e}", exc_info=True)
+            self.log(f"Deduplication failed: {e}, returning original items")
+            # Fallback: return original items if deduplication fails
+            return items
+    
+    def _merge_salience(
+        self, existing: List[str], new: List[str]
+    ) -> List[str]:
+        """
+        Merge new salience items with existing salience set.
+        
+        Combines the lists, then deduplicates semantically to prevent
+        unbounded growth while preserving all unique information.
+        
+        Args:
+            existing: Current salience set
+            new: New salience items to merge
+        
+        Returns:
+            Merged and deduplicated salience set
+        """
+        if not new:
+            return existing
+        
+        if not existing:
+            # If no existing items, just deduplicate the new items
+            return self._deduplicate_semantically(new)
+        
+        # Combine existing and new items
+        combined = existing + new
+        
+        # Deduplicate the combined list
+        merged = self._deduplicate_semantically(combined)
+        
+        # Log the merge operation
+        original_count = len(existing)
+        new_count = len(new)
+        merged_count = len(merged)
+        removed_count = len(combined) - merged_count
+        
+        if removed_count > 0:
+            self.log(f"Merged salience: {original_count} existing + {new_count} new "
+                    f"-> {merged_count} total (removed {removed_count} duplicates)")
+        else:
+            self.log(f"Merged salience: {original_count} existing + {new_count} new "
+                    f"-> {merged_count} total (no duplicates found)")
+        
+        return merged
+    
+    def _fallback_extract_constraints(
+        self, context: List[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Fallback method to extract constraints when main extraction fails.
+        
+        Uses Protected Core schema approach: extracts goal and constraints
+        verbatim from stored state, plus any explicit decisions found in context.
+        
+        This ensures compression always succeeds even if LLM extraction fails.
+        
+        Args:
+            context: List of conversation turns
+        
+        Returns:
+            List of constraint-like items (goal, constraints, key decisions)
+        """
+        fallback_items = []
+        
+        # Always include original goal and constraints (from stored state)
+        if self.original_goal:
+            fallback_items.append(f"Original Goal: {self.original_goal}")
+        
+        for constraint in self.constraints:
+            fallback_items.append(f"Constraint: {constraint}")
+        
+        # Try to extract explicit decisions from context
+        # Look for decision fields or explicit statements
+        for turn in context:
+            decision = turn.get("decision")
+            if decision:
+                fallback_items.append(f"Decision: {decision}")
+            
+            # Look for explicit goal updates in content
+            content = turn.get("content", "")
+            if "goal" in content.lower() and ("updated" in content.lower() or "changed" in content.lower()):
+                # Extract the goal statement if present
+                fallback_items.append(f"Goal Update: {content[:200]}")
+        
+        logger.info(f"Fallback extraction found {len(fallback_items)} items")
+        self.log(f"Using fallback extraction: {len(fallback_items)} items")
+        
+        return fallback_items
+    
+    def _prioritize_items(self, items: List[str]) -> List[str]:
+        """
+        Prioritize salience items by category.
+        
+        Categories (in priority order):
+        1. Constraints (must, cannot, required, must not)
+        2. Decisions (chose, decided, selected, will use)
+        3. Facts (everything else)
+        
+        Args:
+            items: List of salience items to prioritize
+        
+        Returns:
+            Prioritized list (constraints first, then decisions, then facts)
+        """
+        if not items:
+            return items
+        
+        # Define keywords for each category
+        constraint_keywords = ["must", "cannot", "required", "must not", "mustn't", 
+                             "should not", "shouldn't", "forbidden", "prohibited"]
+        decision_keywords = ["chose", "decided", "selected", "will use", "using",
+                           "going with", "picked", "opted"]
+        
+        # Categorize items
+        constraints = []
+        decisions = []
+        facts = []
+        
+        for item in items:
+            item_lower = item.lower()
+            
+            # Check for constraint keywords
+            if any(keyword in item_lower for keyword in constraint_keywords):
+                constraints.append(item)
+            # Check for decision keywords
+            elif any(keyword in item_lower for keyword in decision_keywords):
+                decisions.append(item)
+            else:
+                facts.append(item)
+        
+        # Combine in priority order
+        prioritized = constraints + decisions + facts
+        
+        if len(constraints) > 0 or len(decisions) > 0:
+            self.log(f"Prioritized items: {len(constraints)} constraints, "
+                    f"{len(decisions)} decisions, {len(facts)} facts")
+        
+        return prioritized
 

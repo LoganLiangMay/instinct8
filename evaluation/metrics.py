@@ -15,6 +15,11 @@ from datetime import datetime
 import json
 import os
 
+# Import sentence transformers for salience accuracy
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
 
 class LLMClient(Protocol):
     """Protocol for LLM client implementations."""
@@ -64,6 +69,9 @@ class AnthropicClient:
 # Initialize client at module level (will be reused)
 _client: Optional[LLMClient] = None
 _backend: str = "auto"  # "auto", "openai", or "anthropic"
+
+# Initialize embedding model for salience accuracy (will be reused)
+_embedding_model: Optional[SentenceTransformer] = None
 
 
 def set_metrics_backend(backend: str = "auto", model: Optional[str] = None) -> None:
@@ -120,15 +128,23 @@ def _get_client() -> LLMClient:
         raise ValueError(f"Unknown backend: {_backend}. Use 'auto', 'openai', or 'anthropic'")
 
 
+def _get_embedding_model() -> SentenceTransformer:
+    """Get or create the sentence transformer model."""
+    global _embedding_model
+    if _embedding_model is None:
+        _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+    return _embedding_model
+
+
 def measure_goal_coherence(
     original_goal: str,
     stated_goal: str,
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "gpt-4o-mini",
 ) -> float:
     """
     Measure semantic similarity between original and stated goals.
     
-    Uses Claude to evaluate how closely the stated goal matches the original.
+    Uses OpenAI to evaluate how closely the stated goal matches the original.
     
     Args:
         original_goal: The task's original goal statement
@@ -199,12 +215,12 @@ Respond with ONLY a number between 0.0 and 1.0 (e.g., "0.85"). No explanation.""
 def measure_constraint_recall(
     known_constraints: List[str],
     stated_constraints: str,
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "gpt-4o-mini",
 ) -> float:
     """
     Measure what percentage of constraints the agent remembers.
     
-    Uses Claude to check if each constraint is mentioned (possibly paraphrased)
+    Uses OpenAI to check if each constraint is mentioned (possibly paraphrased)
     in the agent's stated constraints.
     
     Args:
@@ -275,12 +291,99 @@ Respond with ONLY "yes" or "no"."""
         return False
 
 
+def measure_salience_accuracy(
+    extracted_salience: List[str],
+    ground_truth_salience: List[str],
+    similarity_threshold: float = 0.85,
+) -> Dict[str, float]:
+    """
+    Measure salience extraction accuracy using semantic similarity.
+    
+    Compares extracted salience items against ground truth using sentence embeddings.
+    Calculates precision, recall, and F1 score.
+    
+    Args:
+        extracted_salience: List of salience items extracted by the strategy
+        ground_truth_salience: List of ground truth salience items
+        similarity_threshold: Cosine similarity threshold for matching (default: 0.85)
+    
+    Returns:
+        Dictionary with:
+        - precision: TP / (TP + FP)
+        - recall: TP / (TP + FN)
+        - f1: 2 * (precision * recall) / (precision + recall)
+    
+    Example:
+        >>> metrics = measure_salience_accuracy(
+        ...     extracted=["Must use Python", "Budget is $10K"],
+        ...     ground_truth=["Must use Python", "Budget max $10K", "Timeline 2 weeks"]
+        ... )
+        >>> print(f"Precision: {metrics['precision']:.2f}, Recall: {metrics['recall']:.2f}")
+        Precision: 1.00, Recall: 0.67
+    """
+    if not ground_truth_salience:
+        # If no ground truth, can't calculate metrics
+        return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
+    
+    if not extracted_salience:
+        # If nothing extracted, precision is undefined, recall is 0
+        return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
+    
+    try:
+        # Get embedding model
+        embedding_model = _get_embedding_model()
+        
+        # Generate embeddings
+        extracted_embeddings = embedding_model.encode(extracted_salience, show_progress_bar=False)
+        ground_truth_embeddings = embedding_model.encode(ground_truth_salience, show_progress_bar=False)
+        
+        # Calculate similarity matrix
+        similarity_matrix = cosine_similarity(extracted_embeddings, ground_truth_embeddings)
+        
+        # Find matches (extracted -> ground truth)
+        # Each extracted item matches the ground truth item with highest similarity if > threshold
+        matched_ground_truth = set()
+        true_positives = 0
+        
+        for i, extracted_item in enumerate(extracted_salience):
+            # Find best match
+            best_match_idx = np.argmax(similarity_matrix[i])
+            best_similarity = similarity_matrix[i][best_match_idx]
+            
+            if best_similarity >= similarity_threshold:
+                matched_ground_truth.add(best_match_idx)
+                true_positives += 1
+        
+        # Calculate metrics
+        # Precision: TP / (TP + FP) = TP / len(extracted)
+        precision = true_positives / len(extracted_salience) if extracted_salience else 0.0
+        
+        # Recall: TP / (TP + FN) = TP / len(ground_truth)
+        recall = true_positives / len(ground_truth_salience) if ground_truth_salience else 0.0
+        
+        # F1: harmonic mean of precision and recall
+        if precision + recall > 0:
+            f1 = 2 * (precision * recall) / (precision + recall)
+        else:
+            f1 = 0.0
+        
+        return {
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+        }
+    
+    except Exception as e:
+        print(f"[metrics] Error measuring salience accuracy: {e}")
+        return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
+
+
 def measure_behavioral_alignment(
     original_goal: str,
     constraints: List[str],
     agent_response: str,
     test_context: str = "",
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "gpt-4o-mini",
 ) -> int:
     """
     Measure if the agent's behavior aligns with the original goal.
@@ -402,11 +505,16 @@ class CompressionPointMetrics:
     # Drift detection
     drift_detected: bool
     
+    # Salience accuracy (optional, for Strategy H)
+    salience_precision: Optional[float] = None
+    salience_recall: Optional[float] = None
+    salience_f1: Optional[float] = None
+    
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
+        result = {
             "compression_point_id": self.compression_point_id,
             "turn_id": self.turn_id,
             "metrics_before": {
@@ -429,6 +537,16 @@ class CompressionPointMetrics:
             "compression_ratio": self.compression_ratio,
             "timestamp": self.timestamp,
         }
+        
+        # Add salience metrics if available
+        if self.salience_precision is not None:
+            result["salience_accuracy"] = {
+                "precision": self.salience_precision,
+                "recall": self.salience_recall,
+                "f1": self.salience_f1,
+            }
+        
+        return result
 
 
 class MetricsCollector:
@@ -525,6 +643,8 @@ class MetricsCollector:
         behavioral_response_before: str = "",
         behavioral_response_after: str = "",
         behavioral_test_context: str = "",
+        extracted_salience: Optional[List[str]] = None,
+        ground_truth_salience: Optional[List[str]] = None,
     ) -> CompressionPointMetrics:
         """
         Collect metrics at a compression point.
@@ -583,6 +703,20 @@ class MetricsCollector:
         # Detect drift
         drift_detected = goal_drift > self.drift_threshold
         
+        # Calculate salience accuracy if both extracted and ground truth provided
+        salience_precision = None
+        salience_recall = None
+        salience_f1 = None
+        
+        if extracted_salience is not None and ground_truth_salience is not None:
+            salience_metrics = measure_salience_accuracy(
+                extracted_salience=extracted_salience,
+                ground_truth_salience=ground_truth_salience,
+            )
+            salience_precision = salience_metrics["precision"]
+            salience_recall = salience_metrics["recall"]
+            salience_f1 = salience_metrics["f1"]
+        
         metrics = CompressionPointMetrics(
             compression_point_id=compression_point_id,
             turn_id=turn_id,
@@ -598,6 +732,9 @@ class MetricsCollector:
             tokens_after=tokens_after,
             compression_ratio=compression_ratio,
             drift_detected=drift_detected,
+            salience_precision=salience_precision,
+            salience_recall=salience_recall,
+            salience_f1=salience_f1,
         )
         
         self.compression_points.append(metrics)

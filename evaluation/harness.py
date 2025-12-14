@@ -15,9 +15,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Type
 from pathlib import Path
 
-from anthropic import Anthropic
+from openai import OpenAI
 
-from strategies import CompressionStrategy, StrategyB_CodexCheckpoint
+from strategies import CompressionStrategy, StrategyB_CodexCheckpoint, SelectiveSalienceStrategy
 from evaluation.metrics import MetricsCollector
 
 
@@ -68,7 +68,7 @@ class MockAgent:
     A mock agent for running evaluation trials.
     
     This simulates an agent with a context that can be compressed.
-    It uses Claude to generate responses based on its current context.
+    It uses OpenAI to generate responses based on its current context.
     """
     
     def __init__(
@@ -77,9 +77,9 @@ class MockAgent:
         system_prompt: str,
         original_goal: str,
         constraints: List[str],
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "gpt-4o-mini",
     ):
-        self.client = Anthropic()
+        self.client = OpenAI()
         self.model = model
         self.strategy = strategy
         self.system_prompt = system_prompt
@@ -134,7 +134,13 @@ class MockAgent:
         # Build messages from context
         messages = []
         
-        # Add context as system message
+        # Add system prompt
+        messages.append({
+            "role": "system",
+            "content": self.system_prompt
+        })
+        
+        # Add context as user message
         context_text = self._format_current_context()
         
         messages.append({
@@ -143,15 +149,14 @@ class MockAgent:
         })
         
         try:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=300,
-                system=self.system_prompt,
                 messages=messages,
             )
-            return response.content[0].text
+            return response.choices[0].message.content
         except Exception as e:
-            print(f"[agent] Error calling Claude: {e}")
+            print(f"[agent] Error calling OpenAI: {e}")
             return f"(error: {e})"
     
     def _format_current_context(self) -> str:
@@ -267,6 +272,20 @@ def run_single_trial(
             )
             behavioral_after = agent.call(behavioral_prompt)
             
+            # Collect salience metrics if using Strategy H
+            extracted_salience = None
+            ground_truth_salience = None
+            
+            if isinstance(strategy, SelectiveSalienceStrategy):
+                # Get extracted salience from strategy's salience_set
+                extracted_salience = strategy.salience_set.copy() if hasattr(strategy, 'salience_set') else None
+                
+                # Get ground truth salience from template if available
+                ground_truth_salience = template.get("ground_truth_salience", {}).get(
+                    f"compression_point_{compression_point_counter}",
+                    None
+                )
+            
             # Collect metrics
             metrics = collector.collect_at_compression_point(
                 compression_point_id=compression_point_counter,
@@ -279,6 +298,8 @@ def run_single_trial(
                 constraints_stated_after=constraints_after,
                 behavioral_response_after=behavioral_after,
                 behavioral_test_context=behavioral_prompt,
+                extracted_salience=extracted_salience,
+                ground_truth_salience=ground_truth_salience,
             )
             
             print(f"    Goal drift: {metrics.goal_drift:.2f}")
@@ -369,6 +390,74 @@ def run_baseline_evaluation(
     return results
 
 
+def run_strategy_h_evaluation(
+    template_path: str,
+    num_trials: int = 5,
+    output_path: str = "results/strategy_h_results.json",
+) -> EvaluationResults:
+    """
+    Run evaluation using Strategy H (Selective Salience Compression).
+    
+    Args:
+        template_path: Path to the conversation template JSON
+        num_trials: Number of trials to run
+        output_path: Path to save results
+    
+    Returns:
+        EvaluationResults with all trials and aggregate metrics
+    """
+    print(f"\n{'='*60}")
+    print(f"STRATEGY H EVALUATION")
+    print(f"Strategy: Selective Salience Compression (Strategy H)")
+    print(f"Template: {template_path}")
+    print(f"Trials: {num_trials}")
+    print(f"{'='*60}")
+    
+    # Load template
+    template = load_template(template_path)
+    
+    # Run trials
+    trials: List[TrialResult] = []
+    
+    for trial_id in range(1, num_trials + 1):
+        # Create fresh strategy instance for each trial
+        strategy = SelectiveSalienceStrategy()
+        
+        result = run_single_trial(strategy, template, trial_id)
+        trials.append(result)
+    
+    # Calculate aggregate summary
+    aggregate = _calculate_aggregate_summary(trials)
+    
+    # Create results
+    results = EvaluationResults(
+        strategy_name="Strategy H - Selective Salience Compression",
+        template_id=template["template_id"],
+        num_trials=num_trials,
+        trials=trials,
+        aggregate_summary=aggregate,
+    )
+    
+    # Save results
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(results.to_dict(), f, indent=2)
+    
+    print(f"\n{'='*60}")
+    print(f"RESULTS SAVED TO: {output_path}")
+    print(f"{'='*60}")
+    
+    # Print summary
+    print("\nAGGREGATE SUMMARY:")
+    for key, value in aggregate.items():
+        if isinstance(value, float):
+            print(f"  {key}: {value:.3f}")
+        else:
+            print(f"  {key}: {value}")
+    
+    return results
+
+
 def _calculate_aggregate_summary(trials: List[TrialResult]) -> Dict[str, Any]:
     """Calculate aggregate statistics across all trials."""
     if not trials:
@@ -410,6 +499,13 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Run compression strategy evaluation")
     parser.add_argument(
+        "--strategy",
+        type=str,
+        choices=["baseline", "strategy_h", "h"],
+        default="baseline",
+        help="Strategy to evaluate (baseline=Strategy B, strategy_h/h=Strategy H)",
+    )
+    parser.add_argument(
         "--template",
         type=str,
         default="templates/research-synthesis-001.json",
@@ -424,15 +520,29 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output",
         type=str,
-        default="results/baseline_results.json",
-        help="Path to save results",
+        default=None,
+        help="Path to save results (auto-generated if not provided)",
     )
     
     args = parser.parse_args()
     
-    run_baseline_evaluation(
-        template_path=args.template,
-        num_trials=args.trials,
-        output_path=args.output,
-    )
+    # Auto-generate output path if not provided
+    if args.output is None:
+        if args.strategy in ["strategy_h", "h"]:
+            args.output = "results/strategy_h_results.json"
+        else:
+            args.output = "results/baseline_results.json"
+    
+    if args.strategy in ["strategy_h", "h"]:
+        run_strategy_h_evaluation(
+            template_path=args.template,
+            num_trials=args.trials,
+            output_path=args.output,
+        )
+    else:
+        run_baseline_evaluation(
+            template_path=args.template,
+            num_trials=args.trials,
+            output_path=args.output,
+        )
 
