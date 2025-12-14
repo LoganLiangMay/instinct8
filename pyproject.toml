@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "instinct8-agent"
-version = "0.4.1"
+version = "0.4.2"
 description = "Instinct8 Agent - Coding agent with Selective Salience Compression for better goal preservation"
 readme = "README.md"
 license = {text = "Apache-2.0"}
