@@ -1,0 +1,133 @@
+{
+  "strategy": "Codex Baseline",
+  "template_id": "research-synthesis-008-8k-4compactions-realistic",
+  "num_trials": 1,
+  "trials": [
+    {
+      "trial_id": 1,
+      "strategy_name": "Strategy B - Codex-Style Checkpoint",
+      "template_id": "research-synthesis-008-8k-4compactions-realistic",
+      "compression_points": [
+        {
+          "compression_point_id": 1,
+          "turn_id": 40,
+          "metrics_before": {
+            "goal_coherence": 0.8,
+            "constraint_recall": 0.4,
+            "behavioral_alignment": 5,
+            "tokens": 8697
+          },
+          "metrics_after": {
+            "goal_coherence": 0.6,
+            "constraint_recall": 1.0,
+            "behavioral_alignment": 4,
+            "tokens": 8878
+          },
+          "drift": {
+            "goal_drift": 0.20000000000000007,
+            "constraint_loss": -0.6,
+            "drift_detected": true
+          },
+          "compression_ratio": 1.020811774175003,
+          "timestamp": "2025-12-13T16:59:52.625190"
+        },
+        {
+          "compression_point_id": 2,
+          "turn_id": 80,
+          "metrics_before": {
+            "goal_coherence": 0.6,
+            "constraint_recall": 0.8,
+            "behavioral_alignment": 5,
+            "tokens": 15278
+          },
+          "metrics_after": {
+            "goal_coherence": 0.6,
+            "constraint_recall": 0.6,
+            "behavioral_alignment": 4,
+            "tokens": 1263
+          },
+          "drift": {
+            "goal_drift": 0.0,
+            "constraint_loss": 0.20000000000000007,
+            "drift_detected": false
+          },
+          "compression_ratio": 0.08266788846707684,
+          "timestamp": "2025-12-13T17:00:26.126866"
+        },
+        {
+          "compression_point_id": 3,
+          "turn_id": 120,
+          "metrics_before": {
+            "goal_coherence": 0.6,
+            "constraint_recall": 0.6,
+            "behavioral_alignment": 5,
+            "tokens": 8848
+          },
+          "metrics_after": {
+            "goal_coherence": 0.6,
+            "constraint_recall": 0.6,
+            "behavioral_alignment": 4,
+            "tokens": 9031
+          },
+          "drift": {
+            "goal_drift": 0.0,
+            "constraint_loss": 0.0,
+            "drift_detected": false
+          },
+          "compression_ratio": 1.0206826401446654,
+          "timestamp": "2025-12-13T17:00:48.356713"
+        },
+        {
+          "compression_point_id": 4,
+          "turn_id": 150,
+          "metrics_before": {
+            "goal_coherence": 0.6,
+            "constraint_recall": 0.6,
+            "behavioral_alignment": 5,
+            "tokens": 14086
+          },
+          "metrics_after": {
+            "goal_coherence": 0.4,
+            "constraint_recall": 0.6,
+            "behavioral_alignment": 3,
+            "tokens": 1090
+          },
+          "drift": {
+            "goal_drift": 0.19999999999999996,
+            "constraint_loss": 0.0,
+            "drift_detected": true
+          },
+          "compression_ratio": 0.07738179752946188,
+          "timestamp": "2025-12-13T17:01:15.761216"
+        }
+      ],
+      "summary": {
+        "num_compression_points": 4,
+        "avg_goal_coherence_before": 0.65,
+        "avg_goal_coherence_after": 0.5499999999999999,
+        "avg_goal_drift": 0.1,
+        "avg_constraint_recall_before": 0.6000000000000001,
+        "avg_constraint_recall_after": 0.7000000000000001,
+        "avg_constraint_loss": -0.09999999999999998,
+        "avg_behavioral_alignment_after": 3.75,
+        "drift_events_detected": 2,
+        "avg_compression_ratio": 0.5503860250790518
+      },
+      "timestamp": "2025-12-13T17:01:15.761288"
+    }
+  ],
+  "aggregate_summary": {
+    "num_trials": 1,
+    "avg_goal_coherence_before": 0.65,
+    "avg_goal_coherence_after": 0.5499999999999999,
+    "avg_goal_drift": 0.1,
+    "goal_drift_variance": 0.0,
+    "avg_constraint_recall_before": 0.6000000000000001,
+    "avg_constraint_recall_after": 0.7000000000000001,
+    "avg_constraint_loss": -0.09999999999999998,
+    "avg_behavioral_alignment": 3.75,
+    "total_drift_events": 2,
+    "avg_compression_ratio": 0.5503860250790518
+  },
+  "timestamp": "2025-12-13T17:01:15.761334"
+}

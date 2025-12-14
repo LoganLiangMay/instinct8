@@ -15,9 +15,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Type
 from pathlib import Path
 
-from anthropic import Anthropic
+from openai import OpenAI
 
-from strategies import CompressionStrategy, StrategyB_CodexCheckpoint
+from strategies.strategy_base import CompressionStrategy
 from evaluation.metrics import MetricsCollector
 
 
@@ -68,7 +68,7 @@ class MockAgent:
     A mock agent for running evaluation trials.
     
     This simulates an agent with a context that can be compressed.
-    It uses Claude to generate responses based on its current context.
+    It uses OpenAI to generate responses based on its current context.
     """
     
     def __init__(
@@ -77,9 +77,9 @@ class MockAgent:
         system_prompt: str,
         original_goal: str,
         constraints: List[str],
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "gpt-4o",
     ):
-        self.client = Anthropic()
+        self.client = OpenAI()
         self.model = model
         self.strategy = strategy
         self.system_prompt = system_prompt
@@ -143,15 +143,21 @@ class MockAgent:
         })
         
         try:
-            response = self.client.messages.create(
+            # Build messages with system prompt
+            api_messages = []
+            if self.system_prompt:
+                api_messages.append({"role": "system", "content": self.system_prompt})
+            api_messages.extend(messages)
+            
+            response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=300,
-                system=self.system_prompt,
-                messages=messages,
+                messages=api_messages,
             )
-            return response.content[0].text
+            content = response.choices[0].message.content
+            return content if content else "(error: empty response)"
         except Exception as e:
-            print(f"[agent] Error calling Claude: {e}")
+            print(f"[agent] Error calling OpenAI: {e}")
             return f"(error: {e})"
     
     def _format_current_context(self) -> str:
@@ -330,6 +336,7 @@ def run_baseline_evaluation(
     
     for trial_id in range(1, num_trials + 1):
         # Create fresh strategy instance for each trial
+        from strategies.strategy_b_codex import StrategyB_CodexCheckpoint
         strategy = StrategyB_CodexCheckpoint(
             system_prompt=template["initial_setup"]["system_prompt"]
         )
