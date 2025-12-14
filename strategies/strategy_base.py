@@ -122,7 +122,8 @@ class CompressionStrategy(ABC):
     - Strategy E: claude-mem-Inspired Observational Memory
     - Strategy F: Protected Core + Goal Re-assertion (Novel)
     - Strategy G: Hybrid GraphRAG
-    - Strategy H: Keyframe Compression
+    - Strategy H: Selective Salience Compression (Agent-as-Judge)
+    - Strategy H: Keyframe Compression (alternative implementation)
     - Strategy I: A-MEM + Protected Core Hybrid
     """
     
@@ -242,4 +243,5 @@ class CompressionStrategy(ABC):
             result.append(line)
         
         return "\n".join(result)
+
 

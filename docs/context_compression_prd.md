@@ -10,7 +10,7 @@
 
 This capstone builds a **comparative evaluation framework for context compression strategies** in long-running LLM agents. The goal is to systematically measure how different compression approaches impact goal coherence and identify why explicit goal protection is required.
 
-**Key Innovation:** We're not just building another compression technique. We're comparing 7 different strategies (including state-of-the-art memory systems like A-MEM and claude-mem) and proving that none of them preserve goal coherence without explicit goal state protection.
+**Key Innovation:** We're not just building another compression technique. We're comparing 8 different strategies (including state-of-the-art memory systems like A-MEM and claude-mem) and proving that none of them preserve goal coherence without explicit goal state protection.
 
 **Success Metric:** Publish empirical evidence that Protected Core + Goal Re-assertion outperforms A-MEM, claude-mem, and standard summarization on goal coherence across 10+ long-horizon tasks.
 
@@ -73,9 +73,9 @@ This is especially critical for multi-agent systems where subagents inherit pare
 - Templates are parameterized (so you can run same task with different agent models)
 - Enables **reproducible drift measurement** across runs
 
-**2. Strategy Modules (7 pluggable implementations)**
+**2. Strategy Modules (8 pluggable implementations)**
 - Each strategy implements same interface: `compress(context, trigger_point) → compressed_context`
-- Strategies A-E are baselines; F-G are novel
+- Strategies A-E are baselines; F-H are novel
 - All tested on identical tasks with identical compression triggers
 
 **3. Drift Probing Protocol**
@@ -379,11 +379,244 @@ RECENT TURNS:
 """
 ```
 
+**Strategy H — Selective Salience Compression (Agent-as-Judge)**
+
+Tests whether models can reliably identify goal-critical information without explicit schema. The model itself decides what's salient, then preserves those items verbatim while compressing everything else.
+
+**Core Insight:** Instead of using a fixed schema (like Protected Core), this strategy relies on the model's own judgment to identify what matters for goal achievement. This tests a frontier capability: can models reliably predict what information they'll need later?
+
+Implementation structure:
+```python
+class SelectiveSalienceStrategy(CompressionStrategy):
+    """
+    Selective Salience Compression: Model identifies and preserves 
+    goal-critical information verbatim, compresses the rest.
+    """
+    
+    def __init__(self, model: str = "gpt-4o", compression_model: str = "gpt-4o-mini"):
+        from openai import OpenAI
+        self.client = OpenAI()
+        self.model = model  # For salience extraction
+        self.compression_model = compression_model  # For background compression
+        self.salience_set: List[str] = []  # Cumulative salient items
+    
+    def initialize(self, original_goal: str, constraints: List[str]) -> None:
+        """Store initial goal for salience extraction guidance."""
+        self.original_goal = original_goal
+        self.constraints = constraints
+    
+    def compress(self, context: List[Turn], trigger_point: int) -> str:
+        """
+        Steps:
+        1. Extract salient information (verbatim quotes)
+        2. Compress remaining content
+        3. Rebuild context: SYSTEM + SALIENT + BACKGROUND + RECENT
+        """
+        to_compress = context[:trigger_point]
+        
+        # Step 1: Extract salient information
+        new_salience = self._extract_salient_information(to_compress)
+        
+        # Step 2: Merge with existing salience (deduplicate)
+        self.salience_set = self._merge_salience(self.salience_set, new_salience)
+        
+        # Step 3: Compress background (everything except salient items)
+        background_summary = self._compress_background(to_compress, self.salience_set)
+        
+        # Step 4: Rebuild context
+        return self._build_context(self.salience_set, background_summary, context[-3:])
+    
+    def _extract_salient_information(
+        self, context: List[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Extract goal-critical information verbatim.
+        
+        Prompt asks model to identify:
+        - Explicit goals and goal changes
+        - Hard constraints (must/must not)
+        - Key decisions with rationales
+        - Critical facts or requirements
+        - Important tool outputs
+        
+        Returns: List of verbatim quotes (not summaries)
+        """
+        prompt = f"""You are performing selective salience extraction for context compression.
+
+From the following conversation, extract ONLY the information that will directly impact the agent's ability to achieve the user's goal.
+
+Original Goal: {self.original_goal}
+Constraints: {', '.join(self.constraints)}
+
+Include:
+- Explicit goals and goal changes
+- Hard constraints (must/must not)
+- Key decisions with rationales
+- Critical facts or requirements
+- Important tool outputs that affect future actions
+
+Do NOT include:
+- Conversational scaffolding
+- Redundant explanations
+- Intermediate reasoning steps
+- Off-topic tangents
+
+CRITICAL: Quote exactly—do not summarize or paraphrase. Preserve the original wording.
+
+Conversation to analyze:
+{self._format_context(context)}
+
+Output format (one item per line, verbatim quotes):
+- "Quote 1"
+- "Quote 2"
+- ...
+"""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}  # Use structured output
+        )
+        # Parse response into list of quotes
+        import json
+        result = json.loads(response.choices[0].message.content)
+        return result.get("salient_items", [])
+    
+    def _compress_background(
+        self, context: List[Dict[str, Any]], salience_set: List[str]
+    ) -> str:
+        """
+        Compress everything except salient information.
+        
+        Removes items that appear in salience_set, then summarizes remainder.
+        """
+        prompt = f"""Summarize the following conversation, excluding any information that appears in the salience list.
+
+Salience List (do not duplicate):
+{chr(10).join(f'- {item}' for item in salience_set)}
+
+Remaining conversation:
+{self._format_context(context)}
+
+Create a concise summary (2-3 sentences) of the non-critical context."""
+        
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text
+    
+    def _merge_salience(
+        self, existing: List[str], new: List[str]
+    ) -> List[str]:
+        """
+        Merge new salience with existing, handling:
+        - Deduplication (semantic similarity)
+        - Token budget (max 5K tokens)
+        - Recency weighting (prefer newer items)
+        """
+        combined = existing + new
+        # Deduplicate using semantic similarity
+        deduplicated = self._deduplicate_semantically(combined)
+        
+        # Apply token budget (prioritize constraints > decisions > facts)
+        if self._token_count(deduplicated) > 5000:
+            deduplicated = self._prioritize_and_truncate(deduplicated)
+        
+        return deduplicated
+    
+    def _build_context(
+        self,
+        salience_set: List[str],
+        background_summary: str,
+        recent_turns: List[Dict[str, Any]]
+    ) -> str:
+        """Rebuild context with salience first, then background, then recent."""
+        parts = []
+        
+        # System prompt (if present)
+        if hasattr(self, 'system_prompt') and self.system_prompt:
+            parts.append(f"SYSTEM: {self.system_prompt}")
+        
+        # Salient information (verbatim)
+        parts.append("SALIENT INFORMATION (Goal-Critical, Verbatim):")
+        for item in salience_set:
+            parts.append(f"- {item}")
+        
+        # Background summary (compressed)
+        parts.append("\nBACKGROUND SUMMARY (Compressed Context):")
+        parts.append(background_summary)
+        
+        # Recent turns (raw)
+        parts.append("\nRECENT TURNS (Raw):")
+        for turn in recent_turns:
+            parts.append(f"Turn {turn.get('turn_id', '?')}: {turn.get('content', '')}")
+        
+        return "\n\n".join(parts)
+```
+
+Key features:
+- **Model-judged salience**: No fixed schema, model decides what matters
+- **Verbatim preservation**: Salient items quoted exactly (not summarized)
+- **Cumulative salience set**: Grows across compressions with deduplication
+- **Two-part memory**: Salient (verbatim) + Background (compressed)
+- **Error-prone by design**: Tests whether models can reliably identify salience
+
+**Why This Is Distinct:**
+- **vs Protected Core (F)**: Fixed schema vs model judgment
+- **vs A-MEM (D)**: Always includes salient items vs retrieval-based
+- **vs Codex (B)**: Explicit salience extraction vs implicit summarization
+
+**Research Question:** Can models reliably identify goal-critical information they'll need later?
+
 ---
+
+### Phase 3.5: Strategy Implementation H (Week 6-7)
+
+**Goal:** Implement Selective Salience Compression (Agent-as-Judge)
+
+**Deliverables:**
+- [ ] Implement `StrategyH_SelectiveSalience` class
+- [ ] Create salience extraction prompt with clear rubric
+- [ ] Implement salience set management (deduplication, token budget)
+- [ ] Add error handling and fallback strategies
+- [ ] Test on 3-5 templates, measure salience detection accuracy
+- [ ] Document failure modes and edge cases
+
+**Key Implementation Tasks:**
+1. **Salience Extraction Prompt Engineering**
+   - Design prompt that asks model to identify goal-critical information
+   - Specify exact output format (verbatim quotes)
+   - Include original goal and constraints as guidance
+   - Test prompt variations for best results
+
+2. **Salience Set Management**
+   - Implement semantic deduplication (using embeddings)
+   - Apply token budget (5K tokens max)
+   - Prioritization: constraints > decisions > facts
+   - Handle cumulative growth across compressions
+
+3. **Background Compression**
+   - Remove salient items from context before summarizing
+   - Compress remainder into 2-3 sentence summary
+   - Ensure no duplication with salience set
+
+4. **Error Handling**
+   - Fallback if extraction fails (use Protected Core schema)
+   - Handle empty salience extraction
+   - Handle over-extraction (>50 items)
+   - Validate salience quality
+
+5. **Evaluation Metrics** (see separate evaluation methods document)
+   - Salience precision/recall vs ground truth
+   - False positive/negative rates
+   - Goal coherence preservation
+   - Comparison with Protected Core
 
 ### Phase 4: Testing & Evaluation (Weeks 7-9)
 
-**Goal:** Run full evaluation across 7 strategies, 10+ tasks, measure drift
+**Goal:** Run full evaluation across 8 strategies, 10+ tasks, measure drift
 
 **Test Suite:**
 1. **Reference Conversation Templates** (you'll create 10-15)
@@ -398,7 +631,7 @@ RECENT TURNS:
    ```python
    results = {}
    
-   for strategy in [StrategyA, StrategyB, ..., StrategyG]:
+   for strategy in [StrategyA, StrategyB, ..., StrategyH]:
        strategy_results = {}
        
        for template in TEMPLATES:
@@ -496,9 +729,9 @@ RECENT TURNS:
    - Contribution: Protected Core mechanism
 
 2. Methods
-   - Evaluation framework (7 strategies, 10 tasks)
-   - Metrics (goal coherence, constraint recall, behavioral alignment)
-   - Evaluation protocol (drift probing)
+   - Evaluation framework (8 strategies, 10 tasks)
+   - Metrics (goal coherence, constraint recall, behavioral alignment, salience accuracy)
+   - Evaluation protocol (drift probing, salience detection assessment)
 
 3. Results
    - Comparative table: strategy performance
@@ -694,7 +927,8 @@ pub fn run_inline_auto_compact_task(...) -> Result<InlineCompactedContext>
    │   ├── strategy_d_amem.py
    │   ├── strategy_e_claudemem.py
    │   ├── strategy_f_protected_core.py
-   │   └── strategy_g_hybrid.py
+   │   ├── strategy_g_hybrid.py
+   │   └── strategy_h_selective_salience.py
    ├── evaluation/
    │   ├── probing.py (goal/constraint/behavioral probes)
    │   ├── metrics.py (score calculations)
@@ -712,10 +946,10 @@ pub fn run_inline_auto_compact_task(...) -> Result<InlineCompactedContext>
 3. **Onboarding prompt for Cursor/Claude Code:**
 
    ```
-   I'm building a capstone project that evaluates 7 different context compression 
+   I'm building a capstone project that evaluates 8 different context compression 
    strategies for long-running LLM agents. The project compares naive summarization, 
-   state-of-the-art memory systems (A-MEM, claude-mem), and a novel "Protected Core" 
-   mechanism that explicitly protects goal state.
+   state-of-the-art memory systems (A-MEM, claude-mem), a novel "Protected Core" 
+   mechanism, and "Selective Salience" (agent-as-judge) compression.
    
    Read PROJECT_PRD.md in full.
    
@@ -741,7 +975,7 @@ pub fn run_inline_auto_compact_task(...) -> Result<InlineCompactedContext>
 
 - [ ] Codex baseline established (goal coherence decay curve)
 - [ ] Conversation templates are reproducible (run 3x, same results)
-- [ ] All 7 strategies implemented and tested on 10+ templates
+- [ ] All 8 strategies implemented and tested on 10+ templates
 - [ ] Protected Core strategy outperforms A-MEM and claude-mem on goal coherence
 - [ ] Metrics dashboard completed
 - [ ] Paper/blog published
