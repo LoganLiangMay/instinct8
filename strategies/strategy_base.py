@@ -108,15 +108,23 @@ class CompressionStrategy(ABC):
     """
     Abstract base class for all compression strategies.
     
-    All 8 strategies implement this interface:
+    STRATEGIES ARE AUTONOMOUS:
+    - Strategies handle their own goal tracking and adaptation
+    - Strategies detect and respond to goal shifts independently
+    - Strategies make their own compression decisions
+    - The harness is a neutral orchestrator and does NOT influence strategy behavior
+    
+    All strategies implement this interface:
     - Strategy A: Naive Summarization
     - Strategy B: Codex-Style Checkpoint
     - Strategy C: Hierarchical Summarization
     - Strategy D: A-MEM-Style Agentic Memory
     - Strategy E: claude-mem-Inspired Observational Memory
     - Strategy F: Protected Core + Goal Re-assertion (Novel)
-    - Strategy G: Hybrid (A-MEM + Protected Core)
+    - Strategy G: Hybrid GraphRAG
     - Strategy H: Selective Salience Compression (Agent-as-Judge)
+    - Strategy H: Keyframe Compression (alternative implementation)
+    - Strategy I: A-MEM + Protected Core Hybrid
     """
     
     @abstractmethod

@@ -4,6 +4,20 @@ Evaluation Harness
 This module provides the main evaluation loop for running compression strategies
 against conversation templates and collecting metrics.
 
+The harness is a NEUTRAL orchestrator - it does NOT make strategy-specific decisions.
+It only:
+- Runs the evaluation loop
+- Collects metrics
+- Manages the agent lifecycle
+
+Strategies are responsible for their own behavior:
+- Goal tracking and adaptation
+- Compression decisions
+- Context management
+
+The goal_timeline created here is ONLY for metrics/evaluation purposes (ground truth).
+It does NOT influence strategy behavior - strategies handle goal shifts independently.
+
 Usage:
     python -m evaluation.harness --strategy codex --template research-synthesis-001 --trials 5
 """
@@ -17,8 +31,11 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from strategies import CompressionStrategy, StrategyB_CodexCheckpoint, SelectiveSalienceStrategy
+from strategies.strategy_base import CompressionStrategy
+from strategies.strategy_b_codex import StrategyB_CodexCheckpoint
+from strategies.strategy_h_selective_salience import SelectiveSalienceStrategy
 from evaluation.metrics import MetricsCollector
+from evaluation.goal_tracking import track_goal_evolution
 
 
 @dataclass
@@ -30,9 +47,10 @@ class TrialResult:
     compression_points: List[Dict[str, Any]]
     summary: Dict[str, Any]
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    granular_constraint_metrics: Optional[Dict[str, Any]] = None
     
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "trial_id": self.trial_id,
             "strategy_name": self.strategy_name,
             "template_id": self.template_id,
@@ -40,6 +58,9 @@ class TrialResult:
             "summary": self.summary,
             "timestamp": self.timestamp,
         }
+        if self.granular_constraint_metrics:
+            result["granular_constraint_metrics"] = self.granular_constraint_metrics
+        return result
 
 
 @dataclass
@@ -69,6 +90,11 @@ class MockAgent:
     
     This simulates an agent with a context that can be compressed.
     It uses OpenAI to generate responses based on its current context.
+    
+    NOTE: This is part of the NEUTRAL harness infrastructure.
+    - It just passes context to strategies (doesn't interpret it)
+    - It calls strategy.compress() when requested (doesn't decide when)
+    - Strategies are autonomous and handle their own logic
     """
     
     def __init__(
@@ -77,7 +103,7 @@ class MockAgent:
         system_prompt: str,
         original_goal: str,
         constraints: List[str],
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-4o",
     ):
         self.client = OpenAI()
         self.model = model
@@ -149,12 +175,19 @@ class MockAgent:
         })
         
         try:
+            # Build messages with system prompt
+            api_messages = []
+            if self.system_prompt:
+                api_messages.append({"role": "system", "content": self.system_prompt})
+            api_messages.extend(messages)
+            
             response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=300,
-                messages=messages,
+                messages=api_messages,
             )
-            return response.choices[0].message.content
+            content = response.choices[0].message.content
+            return content if content else "(error: empty response)"
         except Exception as e:
             print(f"[agent] Error calling OpenAI: {e}")
             return f"(error: {e})"
@@ -183,9 +216,16 @@ def run_single_trial(
     strategy: CompressionStrategy,
     template: Dict[str, Any],
     trial_id: int,
+    use_granular_metrics: bool = False,
 ) -> TrialResult:
     """
     Run a single trial of a strategy on a template.
+    
+    Args:
+        strategy: The compression strategy to test
+        template: The evaluation template
+        trial_id: Trial identifier
+        use_granular_metrics: If True, enables granular constraint metrics with category breakdowns
     
     Returns TrialResult with metrics at each compression point.
     """
@@ -207,20 +247,28 @@ def run_single_trial(
         constraints=constraints,
     )
     
-    # Create metrics collector
+    # Track goal evolution for METRICS ONLY (ground truth for evaluation)
+    # This does NOT influence strategy behavior - strategies handle goal shifts independently
+    goal_timeline = track_goal_evolution(turns, original_goal, constraints)
+    
+    # Create metrics collector with goal timeline (for scoring, not strategy behavior)
     collector = MetricsCollector(
         original_goal=original_goal,
         constraints=constraints,
+        use_granular_metrics=use_granular_metrics,
+        goal_timeline=goal_timeline,  # Used only for evaluation/scoring
     )
     
     # Run through template turns
+    # NOTE: The harness is neutral - it only orchestrates the evaluation loop.
+    # Strategies handle their own goal tracking, shift detection, and compression decisions.
     compression_point_counter = 0
     
     for turn in turns:
         turn_id = turn["turn_id"]
         print(f"  Turn {turn_id}...", end="")
         
-        # Add turn to agent context
+        # Add turn to agent context (harness just passes data, doesn't interpret)
         agent.add_turn({
             "id": turn_id,
             "role": turn["role"],
@@ -263,6 +311,11 @@ def run_single_trial(
                 "constraint_probe",
                 "What constraints are you operating under?"
             ))
+            
+            # Log agent responses for debugging (especially CP1)
+            if compression_point_counter == 1:
+                print(f"    [DEBUG CP1] Goal after: {goal_after[:100]}...")
+                print(f"    [DEBUG CP1] Constraints after: {constraints_after[:200]}...")
             
             # Behavioral test
             behavioral_test = probing_tasks.get("behavioral_test", {})
@@ -311,13 +364,23 @@ def run_single_trial(
     # Get results
     results = collector.get_results()
     
-    return TrialResult(
+    # Extract granular metrics if available
+    granular_metrics = results.get("granular_constraint_metrics")
+    
+    # Create trial result with granular metrics
+    trial_result = TrialResult(
         trial_id=trial_id,
         strategy_name=strategy.name(),
         template_id=template["template_id"],
         compression_points=results["compression_points"],
         summary=results["summary"],
     )
+    
+    # Add granular metrics if available (using field assignment since it's optional)
+    if granular_metrics:
+        trial_result.granular_constraint_metrics = granular_metrics
+    
+    return trial_result
 
 
 def run_baseline_evaluation(
@@ -351,6 +414,7 @@ def run_baseline_evaluation(
     
     for trial_id in range(1, num_trials + 1):
         # Create fresh strategy instance for each trial
+        from strategies.strategy_b_codex import StrategyB_CodexCheckpoint
         strategy = StrategyB_CodexCheckpoint(
             system_prompt=template["initial_setup"]["system_prompt"]
         )
