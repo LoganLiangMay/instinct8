@@ -272,3 +272,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     generate_detailed_table(args.comparison, args.output)
+

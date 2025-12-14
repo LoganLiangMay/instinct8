@@ -108,14 +108,16 @@ class CompressionStrategy(ABC):
     """
     Abstract base class for all compression strategies.
     
-    All 7 strategies implement this interface:
+    All strategies implement this interface:
     - Strategy A: Naive Summarization
     - Strategy B: Codex-Style Checkpoint
     - Strategy C: Hierarchical Summarization
     - Strategy D: A-MEM-Style Agentic Memory
     - Strategy E: claude-mem-Inspired Observational Memory
     - Strategy F: Protected Core + Goal Re-assertion (Novel)
-    - Strategy G: Hybrid (A-MEM + Protected Core)
+    - Strategy G: Hybrid GraphRAG
+    - Strategy H: Keyframe Compression
+    - Strategy I: A-MEM + Protected Core Hybrid
     """
     
     @abstractmethod

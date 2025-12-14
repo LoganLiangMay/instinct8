@@ -30,9 +30,10 @@ class TrialResult:
     compression_points: List[Dict[str, Any]]
     summary: Dict[str, Any]
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    granular_constraint_metrics: Optional[Dict[str, Any]] = None
     
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "trial_id": self.trial_id,
             "strategy_name": self.strategy_name,
             "template_id": self.template_id,
@@ -40,6 +41,9 @@ class TrialResult:
             "summary": self.summary,
             "timestamp": self.timestamp,
         }
+        if self.granular_constraint_metrics:
+            result["granular_constraint_metrics"] = self.granular_constraint_metrics
+        return result
 
 
 @dataclass
@@ -184,9 +188,16 @@ def run_single_trial(
     strategy: CompressionStrategy,
     template: Dict[str, Any],
     trial_id: int,
+    use_granular_metrics: bool = False,
 ) -> TrialResult:
     """
     Run a single trial of a strategy on a template.
+    
+    Args:
+        strategy: The compression strategy to test
+        template: The evaluation template
+        trial_id: Trial identifier
+        use_granular_metrics: If True, enables granular constraint metrics with category breakdowns
     
     Returns TrialResult with metrics at each compression point.
     """
@@ -212,6 +223,7 @@ def run_single_trial(
     collector = MetricsCollector(
         original_goal=original_goal,
         constraints=constraints,
+        use_granular_metrics=use_granular_metrics,
     )
     
     # Run through template turns
@@ -265,6 +277,11 @@ def run_single_trial(
                 "What constraints are you operating under?"
             ))
             
+            # Log agent responses for debugging (especially CP1)
+            if compression_point_counter == 1:
+                print(f"    [DEBUG CP1] Goal after: {goal_after[:100]}...")
+                print(f"    [DEBUG CP1] Constraints after: {constraints_after[:200]}...")
+            
             # Behavioral test
             behavioral_test = probing_tasks.get("behavioral_test", {})
             behavioral_prompt = behavioral_test.get(
@@ -296,13 +313,23 @@ def run_single_trial(
     # Get results
     results = collector.get_results()
     
-    return TrialResult(
+    # Extract granular metrics if available
+    granular_metrics = results.get("granular_constraint_metrics")
+    
+    # Create trial result with granular metrics
+    trial_result = TrialResult(
         trial_id=trial_id,
         strategy_name=strategy.name(),
         template_id=template["template_id"],
         compression_points=results["compression_points"],
         summary=results["summary"],
     )
+    
+    # Add granular metrics if available (using field assignment since it's optional)
+    if granular_metrics:
+        trial_result.granular_constraint_metrics = granular_metrics
+    
+    return trial_result
 
 
 def run_baseline_evaluation(

@@ -15,6 +15,17 @@ from datetime import datetime
 import json
 import os
 
+# Optional import for granular metrics
+try:
+    from .granular_constraint_metrics import (
+        measure_granular_constraint_recall,
+        GranularConstraintMetrics,
+        format_granular_constraint_report,
+    )
+    GRANULAR_METRICS_AVAILABLE = True
+except ImportError:
+    GRANULAR_METRICS_AVAILABLE = False
+
 
 class LLMClient(Protocol):
     """Protocol for LLM client implementations."""
@@ -465,6 +476,7 @@ class MetricsCollector:
         original_goal: str,
         constraints: List[str],
         drift_threshold: float = 0.05,
+        use_granular_metrics: bool = False,
     ):
         """
         Initialize the metrics collector.
@@ -473,11 +485,15 @@ class MetricsCollector:
             original_goal: The task's original goal
             constraints: List of constraints
             drift_threshold: Goal coherence drop threshold for drift detection (default: 0.05 = 5%)
+            use_granular_metrics: If True, uses granular constraint metrics with category breakdowns
         """
         self.original_goal = original_goal
         self.constraints = constraints
         self.drift_threshold = drift_threshold
+        self.use_granular_metrics = use_granular_metrics and GRANULAR_METRICS_AVAILABLE
         self.compression_points: List[CompressionPointMetrics] = []
+        self.granular_metrics_before: List[GranularConstraintMetrics] = []
+        self.granular_metrics_after: List[GranularConstraintMetrics] = []
     
     def probe_goal(self, agent_call_fn) -> str:
         """
@@ -550,13 +566,25 @@ class MetricsCollector:
         )
         goal_drift = goal_coherence_before - goal_coherence_after
         
-        # Measure constraint recall
-        constraint_recall_before = measure_constraint_recall(
-            self.constraints, constraints_stated_before
-        )
-        constraint_recall_after = measure_constraint_recall(
-            self.constraints, constraints_stated_after
-        )
+        # Measure constraint recall (with optional granular metrics)
+        if self.use_granular_metrics:
+            granular_before = measure_granular_constraint_recall(
+                self.constraints, constraints_stated_before
+            )
+            granular_after = measure_granular_constraint_recall(
+                self.constraints, constraints_stated_after
+            )
+            constraint_recall_before = granular_before.overall_recall
+            constraint_recall_after = granular_after.overall_recall
+            self.granular_metrics_before.append(granular_before)
+            self.granular_metrics_after.append(granular_after)
+        else:
+            constraint_recall_before = measure_constraint_recall(
+                self.constraints, constraints_stated_before
+            )
+            constraint_recall_after = measure_constraint_recall(
+                self.constraints, constraints_stated_after
+            )
         constraint_loss = constraint_recall_before - constraint_recall_after
         
         # Measure behavioral alignment
@@ -666,7 +694,7 @@ class MetricsCollector:
         Returns:
             Complete results dictionary ready for JSON serialization
         """
-        return {
+        result = {
             "original_goal": self.original_goal,
             "constraints": self.constraints,
             "drift_threshold": self.drift_threshold,
@@ -675,6 +703,43 @@ class MetricsCollector:
             ],
             "summary": self.get_summary(),
         }
+        
+        # Add granular metrics if available
+        if self.use_granular_metrics and self.granular_metrics_before:
+            result["granular_constraint_metrics"] = {
+                "before": [m.to_dict() for m in self.granular_metrics_before],
+                "after": [m.to_dict() for m in self.granular_metrics_after],
+            }
+        
+        return result
+    
+    def get_granular_constraint_report(self) -> Optional[str]:
+        """
+        Get a formatted report of granular constraint metrics.
+        
+        Returns:
+            Formatted report string, or None if granular metrics not enabled
+        """
+        if not self.use_granular_metrics or not self.granular_metrics_after:
+            return None
+        
+        if not GRANULAR_METRICS_AVAILABLE:
+            return "Granular metrics module not available"
+        
+        lines = ["=" * 60, "GRANULAR CONSTRAINT RECALL REPORT", "=" * 60, ""]
+        
+        for i, (before, after) in enumerate(zip(self.granular_metrics_before, self.granular_metrics_after), 1):
+            lines.append(f"Compression Point {i}:")
+            lines.append(f"  Before: {before.overall_recall:.1%} overall recall")
+            lines.append(f"  After:  {after.overall_recall:.1%} overall recall")
+            lines.append(f"  Loss:   {before.overall_recall - after.overall_recall:+.1%}")
+            lines.append("")
+            lines.append("  Category Breakdown (After):")
+            for category, score in after.category_scores.items():
+                lines.append(f"    {category}: {score:.1%}")
+            lines.append("")
+        
+        return "\n".join(lines)
     
     def save_results(self, filepath: str) -> None:
         """
@@ -689,6 +754,8 @@ class MetricsCollector:
     def reset(self) -> None:
         """Reset collected metrics for a new trial."""
         self.compression_points = []
+        self.granular_metrics_before = []
+        self.granular_metrics_after = []
 
     def get_unified_results(self) -> Dict[str, Any]:
         """
