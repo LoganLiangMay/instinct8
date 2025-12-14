@@ -77,6 +77,32 @@ python3 -m evaluation.harness \
 cat results/baseline_long_results.json | jq '.aggregate_summary'
 ```
 
+## Running Tests & Evaluations
+
+Use `make` commands for easy testing and evaluation:
+
+```bash
+# See all available commands
+make help
+
+# Run unit tests (~10s)
+make test
+
+# Quick evaluation - 5 samples (~2m)
+make eval-quick
+
+# Compare compression strategies (~15m)
+make eval-compare
+
+# Hierarchical depth evaluation (~5m)
+make eval-hierarchical
+
+# Publication-ready evaluation (~1hr)
+make eval-rigorous
+```
+
+For complete documentation, see **[docs/TESTING.md](docs/TESTING.md)**.
+
 ## Metrics
 
 We measure three core metrics using LLM-as-judge (Claude):
