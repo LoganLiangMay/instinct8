@@ -13,14 +13,77 @@ Key Characteristics:
 - System prompt is preserved (part of initial_context)
 - Last N user messages are kept raw
 - Middle conversation is summarized
-- No explicit goal protection (goals may be lost in summarization)
+- Optional goal/constraint preservation (instinct8 enhancement)
 """
 
-from typing import Any, Dict, List, Optional
-from openai import OpenAI
+import os
+from typing import Any, Dict, List, Optional, Protocol
 
 from .strategy_base import CompressionStrategy
 from evaluation.token_budget import TokenBudget, should_compact, BUDGET_8K
+
+
+class LLMClient(Protocol):
+    """Protocol for LLM client implementations."""
+    def complete(self, prompt: str, max_tokens: int = 500) -> str:
+        """Get completion from LLM."""
+        ...
+
+
+class OpenAISummarizer:
+    """OpenAI API client for summarization."""
+    def __init__(self, model: str = "gpt-4o-mini"):
+        try:
+            from openai import OpenAI
+            self.client = OpenAI()
+            self.model = model
+        except ImportError:
+            raise ImportError("OpenAI package not installed. Run: pip install openai")
+
+    def complete(self, prompt: str, max_tokens: int = 500) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        content = response.choices[0].message.content
+        return content.strip() if content else "(summarization returned empty)"
+
+
+class AnthropicSummarizer:
+    """Anthropic API client for summarization."""
+    def __init__(self, model: str = "claude-sonnet-4-20250514"):
+        try:
+            from anthropic import Anthropic
+            self.client = Anthropic()
+            self.model = model
+        except ImportError:
+            raise ImportError("Anthropic package not installed. Run: pip install anthropic")
+
+    def complete(self, prompt: str, max_tokens: int = 500) -> str:
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text.strip()
+
+
+def _create_llm_client(backend: str = "auto", model: Optional[str] = None) -> LLMClient:
+    """Create LLM client based on backend preference and available API keys."""
+    if backend == "auto":
+        if os.environ.get("OPENAI_API_KEY"):
+            return OpenAISummarizer(model or "gpt-4o-mini")
+        elif os.environ.get("ANTHROPIC_API_KEY"):
+            return AnthropicSummarizer(model or "claude-sonnet-4-20250514")
+        else:
+            raise ValueError("No API key found. Set OPENAI_API_KEY or ANTHROPIC_API_KEY")
+    elif backend == "openai":
+        return OpenAISummarizer(model or "gpt-4o-mini")
+    elif backend == "anthropic":
+        return AnthropicSummarizer(model or "claude-sonnet-4-20250514")
+    else:
+        raise ValueError(f"Unknown backend: {backend}")
 
 
 # Codex's original summarization prompt (from templates/compact/prompt.md)
@@ -69,7 +132,8 @@ class StrategyB_CodexCheckpoint(CompressionStrategy):
     def __init__(
         self,
         system_prompt: str = "",
-        model: str = "gpt-4o",
+        model: Optional[str] = None,
+        backend: str = "auto",
         token_budget: Optional[TokenBudget] = None,
         use_goal_preservation: bool = True,
     ):
@@ -78,14 +142,14 @@ class StrategyB_CodexCheckpoint(CompressionStrategy):
 
         Args:
             system_prompt: The system prompt to preserve across compressions
-            model: OpenAI model to use for summarization
+            model: Model to use for summarization (auto-selected based on backend if None)
+            backend: LLM backend - "auto", "openai", or "anthropic"
             token_budget: Artificial context window budget for testing compaction.
                          Defaults to 8K budget if not provided.
             use_goal_preservation: If True, uses instinct8 enhancements (goal/constraint re-injection).
                                   If False, uses baseline Codex behavior (no explicit goal protection).
         """
-        self.client = OpenAI()
-        self.model = model
+        self.client = _create_llm_client(backend=backend, model=model)
         self.system_prompt = system_prompt
         self.token_budget = token_budget or BUDGET_8K
         self.original_goal: Optional[str] = None
@@ -221,7 +285,7 @@ class StrategyB_CodexCheckpoint(CompressionStrategy):
     
     def _summarize(self, conv_text: str) -> str:
         """
-        Call OpenAI to summarize the conversation.
+        Call LLM to summarize the conversation.
         
         Uses Codex's summarization prompt, optionally enhanced with explicit goal/constraint context.
         """
@@ -245,18 +309,7 @@ class StrategyB_CodexCheckpoint(CompressionStrategy):
                 prompt = CODEX_SUMMARIZATION_PROMPT_BASELINE
                 full_prompt = f"{prompt}\n\nConversation to summarize:\n\n{conv_text}"
             
-            response = self.client.chat.completions.create(
-                model=self.model,
-                max_tokens=500,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": full_prompt
-                    }
-                ]
-            )
-            content = response.choices[0].message.content
-            return content if content else "(summarization returned empty)"
+            return self.client.complete(full_prompt, max_tokens=500)
         except Exception as e:
             self.log(f"Summarization failed: {e}")
             return "(summarization failed)"
@@ -384,4 +437,3 @@ class StrategyB_CodexCheckpoint(CompressionStrategy):
 def create_codex_strategy(system_prompt: str = "") -> StrategyB_CodexCheckpoint:
     """Create a Codex-style compression strategy."""
     return StrategyB_CodexCheckpoint(system_prompt=system_prompt)
-

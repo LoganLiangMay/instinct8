@@ -1,0 +1,192 @@
+{
+  "task_id": "refactor-extract-001",
+  "task_type": "refactoring",
+  "specification": {
+    "goal": "Extract payment processing logic into a dedicated class following SOLID principles",
+    "requirements": [
+      "Extract PaymentProcessor class from monolithic OrderService",
+      "Implement Strategy pattern for different payment methods",
+      "Add proper dependency injection",
+      "Maintain all existing functionality"
+    ],
+    "constraints": [
+      "All existing tests must pass",
+      "No changes to public API of OrderService",
+      "Follow single responsibility principle",
+      "Use abstract base class for payment strategies"
+    ],
+    "context": "OrderService has grown too large (500+ lines) and payment logic is mixed with order management. Need to separate concerns for better maintainability."
+  },
+  "ground_truth": {
+    "file_changes": {
+      "payment/processor.py": "New PaymentProcessor class",
+      "payment/strategies.py": "Payment strategy implementations",
+      "order_service.py": "Refactored to use PaymentProcessor"
+    },
+    "test_cases": [
+      {
+        "name": "test_credit_card_payment",
+        "input": "Process credit card payment",
+        "expected_output": "Payment successful",
+        "description": "Credit card payments should work after refactoring"
+      },
+      {
+        "name": "test_paypal_payment",
+        "input": "Process PayPal payment",
+        "expected_output": "Payment successful",
+        "description": "PayPal payments should work after refactoring"
+      },
+      {
+        "name": "test_order_service_api_unchanged",
+        "input": "Call original OrderService methods",
+        "expected_output": "Same behavior as before",
+        "description": "Public API must remain unchanged"
+      }
+    ],
+    "acceptance_criteria": [
+      "PaymentProcessor is a standalone class",
+      "Each payment method is a separate strategy",
+      "OrderService delegates to PaymentProcessor",
+      "Code coverage remains above 90%",
+      "Cyclomatic complexity reduced"
+    ]
+  },
+  "initial_files": {
+    "order_service.py": "class OrderService:\n    def __init__(self, db, stripe_client, paypal_client):\n        self.db = db\n        self.stripe = stripe_client\n        self.paypal = paypal_client\n    \n    def create_order(self, user_id, items):\n        # 50 lines of order creation logic\n        pass\n    \n    def process_payment(self, order_id, method, details):\n        order = self.db.get_order(order_id)\n        if method == 'credit_card':\n            # 100 lines of credit card processing\n            result = self.stripe.charge(details['card_token'], order.total)\n            if result.success:\n                self._update_order_status(order, 'paid')\n                self._send_receipt(order)\n            return result\n        elif method == 'paypal':\n            # 80 lines of PayPal processing\n            result = self.paypal.execute_payment(details['payment_id'])\n            if result.success:\n                self._update_order_status(order, 'paid')\n                self._send_receipt(order)\n            return result\n        # ... more payment methods\n    \n    def _update_order_status(self, order, status):\n        # 20 lines\n        pass\n    \n    def _send_receipt(self, order):\n        # 30 lines\n        pass\n    \n    # ... 200 more lines of mixed logic"
+  },
+  "conversation": [
+    {
+      "turn_id": 1,
+      "role": "user",
+      "content": "Our OrderService is getting too big and hard to maintain. The payment logic should be extracted into its own class."
+    },
+    {
+      "turn_id": 2,
+      "role": "assistant",
+      "content": "I'll analyze the OrderService to understand the payment-related code that needs extraction.",
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": "order_service.py",
+          "output": "class OrderService:\n    def __init__(self, db, stripe_client, paypal_client):\n        self.db = db\n        self.stripe = stripe_client\n        self.paypal = paypal_client\n    ..."
+        }
+      ]
+    },
+    {
+      "turn_id": 3,
+      "role": "assistant",
+      "content": "I can see the payment logic is mixed throughout. Let me also check the existing tests to ensure we don't break anything.",
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": "tests/test_order_service.py",
+          "output": "# Test file contents"
+        }
+      ]
+    },
+    {
+      "turn_id": 4,
+      "role": "assistant",
+      "content": "I'll start by creating the payment strategies with an abstract base class.",
+      "tool_calls": [
+        {
+          "name": "shell",
+          "input": "mkdir -p payment",
+          "output": ""
+        },
+        {
+          "name": "write_file",
+          "input": "payment/strategies.py",
+          "output": "File created successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 5,
+      "role": "assistant",
+      "content": "Now creating the PaymentProcessor class that uses these strategies.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "payment/processor.py",
+          "output": "File created successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 6,
+      "role": "user",
+      "content": "Make sure the PaymentProcessor can be easily extended with new payment methods."
+    },
+    {
+      "turn_id": 7,
+      "role": "assistant",
+      "content": "I'll add a registration mechanism so new strategies can be added without modifying the processor.",
+      "is_compression_point": true
+    },
+    {
+      "turn_id": 8,
+      "role": "assistant",
+      "content": "Updating the PaymentProcessor with strategy registration.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "payment/processor.py",
+          "output": "File updated successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 9,
+      "role": "assistant",
+      "content": "Now refactoring OrderService to use the new PaymentProcessor.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "order_service.py",
+          "output": "File updated successfully"
+        }
+      ]
+    },
+    {
+      "turn_id": 10,
+      "role": "assistant",
+      "content": "Running the existing tests to verify nothing is broken.",
+      "tool_calls": [
+        {
+          "name": "shell",
+          "input": "pytest tests/test_order_service.py -v",
+          "output": "===== 15 passed in 1.23s ====="
+        }
+      ]
+    },
+    {
+      "turn_id": 11,
+      "role": "user",
+      "content": "Can you also add tests specifically for the new PaymentProcessor?"
+    },
+    {
+      "turn_id": 12,
+      "role": "assistant",
+      "content": "Adding unit tests for the PaymentProcessor and payment strategies.",
+      "tool_calls": [
+        {
+          "name": "write_file",
+          "input": "tests/test_payment_processor.py",
+          "output": "File created successfully"
+        },
+        {
+          "name": "shell",
+          "input": "pytest tests/test_payment_processor.py -v",
+          "output": "===== 12 passed in 0.89s ====="
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_turns": 12,
+    "domains": ["refactoring", "design patterns", "SOLID"],
+    "patterns": ["Strategy", "Dependency Injection"]
+  }
+}

@@ -6,27 +6,118 @@ This module implements the three core metrics for measuring goal coherence:
 2. Constraint Recall Rate - what % of constraints the agent remembers
 3. Behavioral Alignment - whether agent's next action aligns with goal
 
-All metrics use OpenAI as an LLM-as-judge with clear rubrics.
+All metrics use LLM-as-judge with clear rubrics. Supports both OpenAI and Anthropic.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
+import os
 
-from openai import OpenAI
+
+class LLMClient(Protocol):
+    """Protocol for LLM client implementations."""
+    def complete(self, prompt: str, max_tokens: int = 100) -> str:
+        """Get completion from LLM."""
+        ...
+
+
+class OpenAIClient:
+    """OpenAI API client wrapper."""
+    def __init__(self, model: str = "gpt-4o-mini"):
+        try:
+            from openai import OpenAI
+            self.client = OpenAI()
+            self.model = model
+        except ImportError:
+            raise ImportError("OpenAI package not installed. Run: pip install openai")
+
+    def complete(self, prompt: str, max_tokens: int = 100) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content.strip()
+
+
+class AnthropicClient:
+    """Anthropic API client wrapper."""
+    def __init__(self, model: str = "claude-sonnet-4-20250514"):
+        try:
+            from anthropic import Anthropic
+            self.client = Anthropic()
+            self.model = model
+        except ImportError:
+            raise ImportError("Anthropic package not installed. Run: pip install anthropic")
+
+    def complete(self, prompt: str, max_tokens: int = 100) -> str:
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text.strip()
 
 
 # Initialize client at module level (will be reused)
-_client: Optional[OpenAI] = None
+_client: Optional[LLMClient] = None
+_backend: str = "auto"  # "auto", "openai", or "anthropic"
 
 
-def _get_client() -> OpenAI:
-    """Get or create the OpenAI client."""
-    global _client
-    if _client is None:
-        _client = OpenAI()
-    return _client
+def set_metrics_backend(backend: str = "auto", model: Optional[str] = None) -> None:
+    """
+    Set the LLM backend for metrics evaluation.
+
+    Args:
+        backend: "auto", "openai", or "anthropic"
+        model: Optional model name override
+    """
+    global _client, _backend
+    _backend = backend
+    _client = None  # Reset client to be recreated with new settings
+
+
+def _get_client() -> LLMClient:
+    """Get or create the LLM client based on available API keys."""
+    global _client, _backend
+
+    if _client is not None:
+        return _client
+
+    if _backend == "auto":
+        # Try OpenAI first, then Anthropic
+        if os.environ.get("OPENAI_API_KEY"):
+            try:
+                _client = OpenAIClient()
+                print("[metrics] Using OpenAI backend")
+                return _client
+            except Exception:
+                pass
+
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            try:
+                _client = AnthropicClient()
+                print("[metrics] Using Anthropic backend")
+                return _client
+            except Exception:
+                pass
+
+        raise ValueError(
+            "No LLM API key found. Set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable."
+        )
+
+    elif _backend == "openai":
+        _client = OpenAIClient()
+        return _client
+
+    elif _backend == "anthropic":
+        _client = AnthropicClient()
+        return _client
+
+    else:
+        raise ValueError(f"Unknown backend: {_backend}. Use 'auto', 'openai', or 'anthropic'")
 
 
 def measure_goal_coherence(
@@ -37,12 +128,12 @@ def measure_goal_coherence(
     """
     Measure semantic similarity between original and stated goals.
     
-    Uses OpenAI to evaluate how closely the stated goal matches the original.
+    Uses LLM to evaluate how closely the stated goal matches the original.
     
     Args:
         original_goal: The task's original goal statement
         stated_goal: What the agent says its current goal is
-        model: OpenAI model to use for evaluation
+        model: Model name (for compatibility, but backend is auto-selected)
     
     Returns:
         Score from 0.0 to 1.0:
@@ -93,19 +184,12 @@ Consider:
 Respond with ONLY a number between 0.0 and 1.0 (e.g., "0.85"). No explanation."""
 
     try:
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=10,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        
-        content = response.choices[0].message.content
-        if not content:
+        score_text = client.complete(prompt, max_tokens=10)
+        if not score_text:
             return 0.5  # Default to middle if empty response
-        score_text = content.strip()
         score = float(score_text)
         return max(0.0, min(1.0, score))
-    
+
     except (ValueError, IndexError) as e:
         print(f"[metrics] Failed to parse goal coherence score: {e}")
         return 0.5  # Default to middle if parsing fails
@@ -122,13 +206,13 @@ def measure_constraint_recall(
     """
     Measure what percentage of constraints the agent remembers.
     
-    Uses OpenAI to check if each constraint is mentioned (possibly paraphrased)
+    Uses LLM to check if each constraint is mentioned (possibly paraphrased)
     in the agent's stated constraints.
     
     Args:
         known_constraints: List of original constraints
         stated_constraints: What the agent says its constraints are
-        model: OpenAI model to use for evaluation
+        model: Model name (for compatibility, but backend is auto-selected)
     
     Returns:
         Recall rate from 0.0 to 1.0:
@@ -163,13 +247,13 @@ def measure_constraint_recall(
 def _constraint_mentioned(
     constraint: str,
     stated_text: str,
-    client: OpenAI,
+    client: LLMClient,
     model: str,
 ) -> bool:
     """
     Check if a specific constraint is mentioned in the stated text.
-    
-    Uses fuzzy matching via OpenAI to handle paraphrasing.
+
+    Uses fuzzy matching via LLM to handle paraphrasing.
     """
     prompt = f"""Does this statement mention or imply this constraint?
 
@@ -185,18 +269,11 @@ Consider:
 Respond with ONLY "yes" or "no"."""
 
     try:
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=5,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        
-        content = response.choices[0].message.content
-        if not content:
+        answer = client.complete(prompt, max_tokens=5)
+        if not answer:
             return False
-        answer = content.strip().lower()
-        return "yes" in answer
-    
+        return "yes" in answer.lower()
+
     except Exception as e:
         print(f"[metrics] Error checking constraint: {e}")
         return False
@@ -220,7 +297,7 @@ def measure_behavioral_alignment(
         constraints: List of constraints the agent should follow
         agent_response: The agent's response to a test prompt
         test_context: Optional context about what the test was
-        model: OpenAI model to use for evaluation
+        model: Model name (for compatibility, but backend is auto-selected)
     
     Returns:
         Rubric score from 1 to 5:
@@ -289,16 +366,9 @@ Rate the alignment on a 1-5 scale:
 Respond with ONLY a number from 1 to 5. No explanation."""
 
     try:
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=5,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        
-        content = response.choices[0].message.content
-        if not content:
+        score_text = client.complete(prompt, max_tokens=5)
+        if not score_text:
             return 3  # Default to ambiguous if empty response
-        score_text = content.strip()
         score = int(float(score_text))
         return max(1, min(5, score))
     
@@ -619,4 +689,135 @@ class MetricsCollector:
     def reset(self) -> None:
         """Reset collected metrics for a new trial."""
         self.compression_points = []
+
+    def get_unified_results(self) -> Dict[str, Any]:
+        """
+        Get results in unified format compatible with the unified aggregator.
+
+        This method converts compression point metrics to the unified
+        MetricResult format for cross-system aggregation.
+
+        Returns:
+            Dictionary with unified aggregated metrics
+        """
+        from .metric_interfaces import MetricResult, MetricType
+        from .unified_aggregator import UnifiedMetricAggregator
+
+        aggregator = UnifiedMetricAggregator()
+
+        for cp in self.compression_points:
+            results = [
+                MetricResult(
+                    "goal_coherence_before",
+                    cp.goal_coherence_before,
+                    MetricType.SCORE_0_1,
+                ),
+                MetricResult(
+                    "goal_coherence_after",
+                    cp.goal_coherence_after,
+                    MetricType.SCORE_0_1,
+                ),
+                MetricResult("goal_drift", cp.goal_drift, MetricType.DELTA),
+                MetricResult(
+                    "constraint_recall_before",
+                    cp.constraint_recall_before,
+                    MetricType.PERCENTAGE,
+                ),
+                MetricResult(
+                    "constraint_recall_after",
+                    cp.constraint_recall_after,
+                    MetricType.PERCENTAGE,
+                ),
+                MetricResult("constraint_loss", cp.constraint_loss, MetricType.DELTA),
+                MetricResult(
+                    "behavioral_alignment_before",
+                    cp.behavioral_alignment_before,
+                    MetricType.SCORE_1_5,
+                ),
+                MetricResult(
+                    "behavioral_alignment_after",
+                    cp.behavioral_alignment_after,
+                    MetricType.SCORE_1_5,
+                ),
+                MetricResult(
+                    "compression_ratio", cp.compression_ratio, MetricType.PERCENTAGE
+                ),
+            ]
+            aggregator.add_batch(results)
+
+        return aggregator.aggregate(group_by_category=False)
+
+    def add_qa_metrics(self, results: List) -> None:
+        """
+        Add QA metrics from A-mem evaluations to the collector.
+
+        This allows combining compression and QA metrics in a single
+        aggregation when evaluating memory systems on QA benchmarks.
+
+        Args:
+            results: List of MetricResult objects from QA evaluation
+        """
+        # Store for later aggregation
+        if not hasattr(self, "_qa_results"):
+            self._qa_results: List = []
+        self._qa_results.extend(results)
+
+    def get_combined_results(self) -> Dict[str, Any]:
+        """
+        Get combined compression and QA metrics in unified format.
+
+        Returns:
+            Dictionary with both compression and QA aggregated metrics
+        """
+        from .metric_interfaces import MetricResult, MetricType
+        from .unified_aggregator import UnifiedMetricAggregator
+
+        aggregator = UnifiedMetricAggregator()
+
+        # Add compression metrics
+        for cp in self.compression_points:
+            results = [
+                MetricResult(
+                    "goal_coherence_before",
+                    cp.goal_coherence_before,
+                    MetricType.SCORE_0_1,
+                ),
+                MetricResult(
+                    "goal_coherence_after",
+                    cp.goal_coherence_after,
+                    MetricType.SCORE_0_1,
+                ),
+                MetricResult("goal_drift", cp.goal_drift, MetricType.DELTA),
+                MetricResult(
+                    "constraint_recall_before",
+                    cp.constraint_recall_before,
+                    MetricType.PERCENTAGE,
+                ),
+                MetricResult(
+                    "constraint_recall_after",
+                    cp.constraint_recall_after,
+                    MetricType.PERCENTAGE,
+                ),
+                MetricResult("constraint_loss", cp.constraint_loss, MetricType.DELTA),
+                MetricResult(
+                    "behavioral_alignment_before",
+                    cp.behavioral_alignment_before,
+                    MetricType.SCORE_1_5,
+                ),
+                MetricResult(
+                    "behavioral_alignment_after",
+                    cp.behavioral_alignment_after,
+                    MetricType.SCORE_1_5,
+                ),
+                MetricResult(
+                    "compression_ratio", cp.compression_ratio, MetricType.PERCENTAGE
+                ),
+            ]
+            aggregator.add_batch(results)
+
+        # Add QA metrics if present
+        if hasattr(self, "_qa_results"):
+            aggregator.add_batch(self._qa_results)
+
+        return aggregator.aggregate(group_by_category=True)
 
