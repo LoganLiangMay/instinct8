@@ -2,6 +2,9 @@
 """
 Run publication-ready rigorous evaluation.
 
+NOTE: This script is DEPRECATED. Use the unified evaluation script instead:
+    python scripts/run_eval.py --rigorous --n-runs 3
+
 This script provides a comprehensive evaluation framework that meets
 NeurIPS/ICLR publication standards with proper statistical methodology:
 

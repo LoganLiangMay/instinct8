@@ -153,6 +153,14 @@ from .hierarchical_metrics import (
     measure_reasoning_fidelity,
 )
 
+# CLI benchmark client (from graphrag-rs)
+from .cli_benchmark_client import (
+    CLIBenchmarkClient,
+    TurnResult,
+    BenchmarkResult,
+    run_multi_turn_session,
+)
+
 __all__ = [
     # Original exports
     "measure_goal_coherence",
@@ -263,5 +271,10 @@ __all__ = [
     "measure_element_recall",
     "measure_depth_precision",
     "measure_reasoning_fidelity",
+    # CLI benchmark client
+    "CLIBenchmarkClient",
+    "TurnResult",
+    "BenchmarkResult",
+    "run_multi_turn_session",
 ]
 

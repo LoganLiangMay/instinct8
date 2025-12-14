@@ -2,6 +2,9 @@
 """
 Run A-mem's LoCoMo Benchmark on Codex Agents
 
+NOTE: This script is DEPRECATED. Use the unified evaluation script instead:
+    python scripts/run_eval.py --dataset locomo
+
 This script evaluates Codex compression strategies using A-mem's original
 LoCoMo benchmark for direct comparison.
 
