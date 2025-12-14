@@ -27,6 +27,7 @@ from datetime import datetime
 
 from .strategy_base import CompressionStrategy
 from evaluation.token_budget import TokenBudget, should_compact, BUDGET_8K
+from evaluation.goal_tracking import detect_goal_shift_in_message, extract_new_goal_from_message
 
 
 @dataclass
@@ -192,6 +193,34 @@ class StrategyF_ProtectedCore(CompressionStrategy):
         self.protected_core.timestamp_updated = datetime.now().isoformat()
         self.log(f"Goal updated to: {new_goal} (rationale: {rationale})")
     
+    def _detect_and_update_goal_shifts(self, context: List[Dict[str, Any]]) -> None:
+        """
+        Scan context for goal shifts and update Protected Core autonomously.
+        
+        Strategy F should detect shifts in user messages and update its
+        Protected Core to reflect the current goal state.
+        """
+        if self.protected_core is None:
+            return
+        
+        current_goal = self.protected_core.current_goal
+        
+        # Scan user messages for goal shifts
+        for turn in context:
+            if turn.get("role") == "user":
+                message = turn.get("content", "")
+                shift_detected = detect_goal_shift_in_message(message)
+                
+                if shift_detected:
+                    # Extract new goal from the shift message
+                    new_goal = extract_new_goal_from_message(message, current_goal)
+                    if new_goal and new_goal != current_goal:
+                        # Update Protected Core with new goal
+                        turn_id = turn.get("id", "?")
+                        rationale = f"Goal shift detected in user message at turn {turn_id}"
+                        self.update_goal(new_goal, rationale=rationale)
+                        current_goal = new_goal  # Update for subsequent checks
+    
     def compress(
         self,
         context: List[Dict[str, Any]],
@@ -229,6 +258,10 @@ class StrategyF_ProtectedCore(CompressionStrategy):
         if not to_compress:
             self.log("Nothing to compress")
             return self._format_context_with_protected_core("", [])
+
+        # Detect and handle goal shifts in the context
+        # Strategy F should autonomously detect shifts and update its Protected Core
+        self._detect_and_update_goal_shifts(to_compress)
 
         # Build reconstructed prompt to check token budget
         reconstructed = self.render_reconstructed_prompt(to_compress)

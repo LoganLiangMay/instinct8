@@ -9,7 +9,7 @@ This module implements the three core metrics for measuring goal coherence:
 All metrics use LLM-as-judge with clear rubrics. Supports both OpenAI and Anthropic.
 """
 
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
@@ -477,6 +477,7 @@ class MetricsCollector:
         constraints: List[str],
         drift_threshold: float = 0.05,
         use_granular_metrics: bool = False,
+        goal_timeline: Optional[Dict[int, Tuple[str, List[str]]]] = None,
     ):
         """
         Initialize the metrics collector.
@@ -486,11 +487,13 @@ class MetricsCollector:
             constraints: List of constraints
             drift_threshold: Goal coherence drop threshold for drift detection (default: 0.05 = 5%)
             use_granular_metrics: If True, uses granular constraint metrics with category breakdowns
+            goal_timeline: Optional dict mapping turn_id to (current_goal, current_constraints) for goal shift tracking
         """
         self.original_goal = original_goal
         self.constraints = constraints
         self.drift_threshold = drift_threshold
         self.use_granular_metrics = use_granular_metrics and GRANULAR_METRICS_AVAILABLE
+        self.goal_timeline = goal_timeline or {}
         self.compression_points: List[CompressionPointMetrics] = []
         self.granular_metrics_before: List[GranularConstraintMetrics] = []
         self.granular_metrics_after: List[GranularConstraintMetrics] = []
@@ -557,13 +560,49 @@ class MetricsCollector:
         Returns:
             CompressionPointMetrics with all measurements
         """
-        # Measure goal coherence
-        goal_coherence_before = measure_goal_coherence(
+        # Determine current goal at this turn (for goal shift scenarios)
+        current_goal = self.original_goal
+        if self.goal_timeline:
+            # Find the most recent goal state before or at this turn
+            relevant_turns = [t for t in self.goal_timeline.keys() if t <= turn_id]
+            if relevant_turns:
+                latest_turn = max(relevant_turns)
+                current_goal = self.goal_timeline[latest_turn][0]
+        
+        # Measure goal coherence against ORIGINAL goal (for baseline comparison)
+        goal_coherence_original_before = measure_goal_coherence(
             self.original_goal, goal_stated_before
         )
-        goal_coherence_after = measure_goal_coherence(
+        goal_coherence_original_after = measure_goal_coherence(
             self.original_goal, goal_stated_after
         )
+        
+        # Measure goal coherence against CURRENT goal (for shift-aware evaluation)
+        goal_coherence_current_before = measure_goal_coherence(
+            current_goal, goal_stated_before
+        )
+        goal_coherence_current_after = measure_goal_coherence(
+            current_goal, goal_stated_after
+        )
+        
+        # Use current goal coherence if there's been a shift, otherwise use original
+        # This ensures correct adaptation scores higher than incorrect adherence
+        goal_shift_detected = current_goal != self.original_goal
+        if goal_shift_detected:
+            # Goal has shifted - measure against current goal
+            goal_coherence_before = goal_coherence_current_before
+            goal_coherence_after = goal_coherence_current_after
+            # Debug: Log when we're using current goal
+            if compression_point_id == 1 or turn_id in [80, 120, 150]:  # Log at key points
+                print(f"    [DEBUG] Goal shift detected at turn {turn_id}")
+                print(f"    [DEBUG] Measuring against CURRENT goal: {current_goal[:80]}...")
+                print(f"    [DEBUG] Agent stated: {goal_stated_after[:80]}...")
+                print(f"    [DEBUG] Coherence (current): {goal_coherence_current_after:.2f}, (original): {goal_coherence_original_after:.2f}")
+        else:
+            # No shift - measure against original goal
+            goal_coherence_before = goal_coherence_original_before
+            goal_coherence_after = goal_coherence_original_after
+        
         goal_drift = goal_coherence_before - goal_coherence_after
         
         # Measure constraint recall (with optional granular metrics)

@@ -108,6 +108,12 @@ class CompressionStrategy(ABC):
     """
     Abstract base class for all compression strategies.
     
+    STRATEGIES ARE AUTONOMOUS:
+    - Strategies handle their own goal tracking and adaptation
+    - Strategies detect and respond to goal shifts independently
+    - Strategies make their own compression decisions
+    - The harness is a neutral orchestrator and does NOT influence strategy behavior
+    
     All strategies implement this interface:
     - Strategy A: Naive Summarization
     - Strategy B: Codex-Style Checkpoint

@@ -4,6 +4,20 @@ Evaluation Harness
 This module provides the main evaluation loop for running compression strategies
 against conversation templates and collecting metrics.
 
+The harness is a NEUTRAL orchestrator - it does NOT make strategy-specific decisions.
+It only:
+- Runs the evaluation loop
+- Collects metrics
+- Manages the agent lifecycle
+
+Strategies are responsible for their own behavior:
+- Goal tracking and adaptation
+- Compression decisions
+- Context management
+
+The goal_timeline created here is ONLY for metrics/evaluation purposes (ground truth).
+It does NOT influence strategy behavior - strategies handle goal shifts independently.
+
 Usage:
     python -m evaluation.harness --strategy codex --template research-synthesis-001 --trials 5
 """
@@ -19,6 +33,7 @@ from openai import OpenAI
 
 from strategies.strategy_base import CompressionStrategy
 from evaluation.metrics import MetricsCollector
+from evaluation.goal_tracking import track_goal_evolution
 
 
 @dataclass
@@ -73,6 +88,11 @@ class MockAgent:
     
     This simulates an agent with a context that can be compressed.
     It uses OpenAI to generate responses based on its current context.
+    
+    NOTE: This is part of the NEUTRAL harness infrastructure.
+    - It just passes context to strategies (doesn't interpret it)
+    - It calls strategy.compress() when requested (doesn't decide when)
+    - Strategies are autonomous and handle their own logic
     """
     
     def __init__(
@@ -219,21 +239,28 @@ def run_single_trial(
         constraints=constraints,
     )
     
-    # Create metrics collector
+    # Track goal evolution for METRICS ONLY (ground truth for evaluation)
+    # This does NOT influence strategy behavior - strategies handle goal shifts independently
+    goal_timeline = track_goal_evolution(turns, original_goal, constraints)
+    
+    # Create metrics collector with goal timeline (for scoring, not strategy behavior)
     collector = MetricsCollector(
         original_goal=original_goal,
         constraints=constraints,
         use_granular_metrics=use_granular_metrics,
+        goal_timeline=goal_timeline,  # Used only for evaluation/scoring
     )
     
     # Run through template turns
+    # NOTE: The harness is neutral - it only orchestrates the evaluation loop.
+    # Strategies handle their own goal tracking, shift detection, and compression decisions.
     compression_point_counter = 0
     
     for turn in turns:
         turn_id = turn["turn_id"]
         print(f"  Turn {turn_id}...", end="")
         
-        # Add turn to agent context
+        # Add turn to agent context (harness just passes data, doesn't interpret)
         agent.add_turn({
             "id": turn_id,
             "role": turn["role"],
