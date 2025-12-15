@@ -3,6 +3,7 @@
 # for long-running LLM agents.
 
 from .strategy_base import CompressionStrategy, Turn, ToolCall, ProbeResults
+from .strategy_a_naive import StrategyA_NaiveSummarization, create_naive_strategy
 from .strategy_b_codex import StrategyB_CodexCheckpoint, create_codex_strategy
 from .strategy_d_amem import StrategyD_AMemStyle, create_amem_strategy
 from .strategy_f_protected_core import StrategyF_ProtectedCore, create_protected_core_strategy
@@ -17,6 +18,9 @@ __all__ = [
     "Turn",
     "ToolCall",
     "ProbeResults",
+    # Strategy A - Naive Summarization
+    "StrategyA_NaiveSummarization",
+    "create_naive_strategy",
     # Strategy B - Codex
     "StrategyB_CodexCheckpoint",
     "create_codex_strategy",
