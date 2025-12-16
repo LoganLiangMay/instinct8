@@ -85,8 +85,8 @@ class SelectiveSalienceStrategy(CompressionStrategy):
                    f"compression_model={compression_model}, "
                    f"similarity_threshold={similarity_threshold}")
         
-        # Log initialization for debugging
-        self.log(f"Strategy H initialized with models: extraction={extraction_model}, compression={compression_model}")
+        # Log initialization for debugging (suppressed by default - verbose logging)
+        # self.log(f"Strategy H initialized with models: extraction={extraction_model}, compression={compression_model}")
     
     def initialize(self, original_goal: str, constraints: List[str]) -> None:
         """
@@ -100,9 +100,10 @@ class SelectiveSalienceStrategy(CompressionStrategy):
         self.constraints = constraints
         self.salience_set = []
         
-        self.log(f"Initialized with goal: {original_goal}")
-        self.log(f"Constraints: {constraints}")
-        logger.info(f"Strategy H initialized with goal: {original_goal[:100]}...")
+        # Log initialization (suppressed by default - verbose logging)
+        # self.log(f"Initialized with goal: {original_goal}")
+        # self.log(f"Constraints: {constraints}")
+        # logger.info(f"Strategy H initialized with goal: {original_goal[:100]}...")
     
     def update_goal(self, new_goal: str, rationale: str = "") -> None:
         """

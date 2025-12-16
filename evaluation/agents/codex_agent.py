@@ -12,14 +12,6 @@ from typing import Any, Dict, List, Optional
 
 from .base import AgentConfig, BaseAgent
 
-import sys
-from pathlib import Path
-
-# Add strategies to path
-_strategies_path = Path(__file__).parent.parent.parent / "strategies"
-if str(_strategies_path) not in sys.path:
-    sys.path.insert(0, str(_strategies_path))
-
 
 @dataclass
 class ShellCommand:
