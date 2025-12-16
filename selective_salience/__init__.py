@@ -17,5 +17,6 @@ Usage:
 from .compressor import SelectiveSalienceCompressor
 from .codex_integration import Instinct8Agent, create_instinct8_agent
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 __all__ = ["SelectiveSalienceCompressor", "Instinct8Agent", "create_instinct8_agent"]
+
