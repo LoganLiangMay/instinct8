@@ -21,6 +21,7 @@ Strategy F makes goal protection explicit and first-class.
 """
 
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol
 from datetime import datetime
@@ -53,9 +54,7 @@ class ProtectedCore:
 
 
 class LLMClient(Protocol):
-    """Protocol for LLM client implementations."""
     def complete(self, prompt: str, max_tokens: int = 500) -> str:
-        """Get completion from LLM."""
         ...
 
 
@@ -193,33 +192,233 @@ class StrategyF_ProtectedCore(CompressionStrategy):
         self.protected_core.timestamp_updated = datetime.now().isoformat()
         self.log(f"Goal updated to: {new_goal} (rationale: {rationale})")
     
+    def update_constraints(self, new_constraints: List[str], rationale: str = "") -> None:
+        """
+        Update constraints and record the change.
+        
+        This is called when constraints change (e.g., budget shift from $5K to $1K).
+        The change is tracked in the ProtectedCore.
+        """
+        if self.protected_core is None:
+            raise ValueError("ProtectedCore not initialized. Call initialize() first.")
+        
+        old_constraints = self.protected_core.hard_constraints.copy()
+        self.protected_core.hard_constraints = new_constraints
+        
+        decision = Decision(
+            decision=f"Constraints updated: {', '.join(new_constraints)}",
+            rationale=rationale or f"Constraint change from: {', '.join(old_constraints)}",
+        )
+        self.protected_core.key_decisions.append(decision)
+        self.protected_core.timestamp_updated = datetime.now().isoformat()
+        self.log(f"Constraints updated: {new_constraints}")
+    
+    def add_constraint(self, new_constraint: str, rationale: str = "") -> None:
+        """
+        Add a new constraint to the ProtectedCore.
+        
+        Useful when a new constraint is introduced mid-conversation.
+        """
+        if self.protected_core is None:
+            raise ValueError("ProtectedCore not initialized. Call initialize() first.")
+        
+        if new_constraint not in self.protected_core.hard_constraints:
+            self.protected_core.hard_constraints.append(new_constraint)
+            
+            decision = Decision(
+                decision=f"New constraint added: {new_constraint}",
+                rationale=rationale or "New constraint introduced during conversation",
+            )
+            self.protected_core.key_decisions.append(decision)
+            self.protected_core.timestamp_updated = datetime.now().isoformat()
+            self.log(f"Added constraint: {new_constraint}")
+    
+    def _detect_constraint_changes(self, message: str) -> Optional[Dict[str, Any]]:
+        """
+        Detect constraint changes in a message (e.g., budget shifts).
+        
+        Returns:
+            Dict with 'type' ('budget', 'timeline', 'team', etc.) and 'new_value' if detected
+        """
+        if self.protected_core is None:
+            return None
+        
+        message_lower = message.lower()
+        
+        # Budget changes
+        budget_patterns = [
+            r'(?:budget|cost|spending).*?(?:is|now|changed?|reduced?|increased?|cut).*?\$?(\d+[km]?)',
+            r'\$?(\d+[km]?).*?(?:budget|monthly|cost)',
+            r'(?:reduce|cut|increase|change).*?(?:budget|cost).*?(?:to|from).*?\$?(\d+[km]?)',
+        ]
+        for pattern in budget_patterns:
+            match = re.search(pattern, message_lower)
+            if match:
+                value = match.group(1)
+                # Check if this is different from current constraints
+                current_budget = None
+                for constraint in self.protected_core.hard_constraints:
+                    if 'budget' in constraint.lower() or '$' in constraint:
+                        # Extract current budget value
+                        budget_match = re.search(r'\$?(\d+[km]?)', constraint.lower())
+                        if budget_match:
+                            current_budget = budget_match.group(1)
+                            break
+                
+                if current_budget and value != current_budget:
+                    return {
+                        'type': 'budget',
+                        'old_value': f'${current_budget}',
+                        'new_value': f'${value}',
+                    }
+        
+        # Timeline changes
+        if any(word in message_lower for word in ['timeline', 'deadline', 'weeks', 'months', 'days']):
+            # Could extract specific timeline changes here
+            pass
+        
+        # Team size changes
+        if any(word in message_lower for word in ['team', 'engineers', 'developers', 'people']):
+            # Could extract team size changes here
+            pass
+        
+        return None
+    
+    def _is_important_detail(self, turn: Dict[str, Any]) -> bool:
+        """
+        Determine if a turn contains important details that should be preserved.
+        
+        Heuristics:
+        1. Has explicit "decision" field (template-specific)
+        2. Contains specific technical choices (schema formats, thresholds, etc.)
+        3. Contains constraint-like information (budgets, timelines, requirements)
+        4. Contains tool call outputs with specific recommendations
+        """
+        # Method 1: Explicit decision field (template-specific)
+        if turn.get("decision"):
+            return True
+        
+        # Method 2: Look for specific technical details
+        content = turn.get("content", "").lower()
+        
+        # Technical choices that are important
+        important_indicators = [
+            r'\b(?:schema|format|protocol|standard)\s+(?:is|will be|chosen|selected|using)\s+(\w+)',
+            r'\b(?:threshold|limit|max|min)\s+(?:is|set to|of)\s+([\d>]+)',
+            r'\b(?:instance|server|compute)\s+(?:is|will be|using)\s+([\w\.]+)',
+            r'\b(?:architecture|stack|platform)\s+(?:is|will be|chosen|selected)\s+([\w\s]+)',
+            r'\b(?:decision|chose|selected|recommend)\s+([^\.]+)',
+        ]
+        
+        for pattern in important_indicators:
+            if re.search(pattern, content):
+                return True
+        
+        # Method 3: Tool calls with specific outputs
+        tool_call = turn.get("tool_call")
+        if tool_call and isinstance(tool_call, dict):
+            output = tool_call.get("output", "")
+            # If tool output contains specific recommendations or numbers
+            if any(char.isdigit() for char in output) or len(output) > 50:
+                return True
+        
+        return False
+    
+    def _extract_important_detail(self, turn: Dict[str, Any]) -> Optional[str]:
+        """
+        Extract the important detail from a turn as a decision-like string.
+        
+        Returns:
+            A concise decision string, or None if nothing important found
+        """
+        # If explicit decision field exists, use it
+        if turn.get("decision"):
+            return turn.get("decision")
+        
+        content = turn.get("content", "")
+        
+        # Try to extract decision-like statements
+        # Pattern: "We chose X" or "Decision: X" or "Selected: X"
+        decision_patterns = [
+            r'(?:decision|chose|selected|recommend|using|will use):\s*([^\.\n]+)',
+            r'(?:architecture|stack|platform|schema|format)\s+(?:is|will be)\s+([^\.\n]+)',
+        ]
+        
+        for pattern in decision_patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                extracted = match.group(1).strip()
+                if len(extracted) > 10 and len(extracted) < 200:
+                    return extracted
+        
+        # Fallback: extract first sentence if it looks like a decision
+        first_sentence = content.split('.')[0] if '.' in content else content[:100]
+        if any(word in first_sentence.lower() for word in ['recommend', 'chose', 'selected', 'decision', 'using']):
+            return first_sentence.strip()
+        
+        return None
+    
     def _detect_and_update_goal_shifts(self, context: List[Dict[str, Any]]) -> None:
         """
-        Scan context for goal shifts and update Protected Core autonomously.
+        Scan context for goal shifts, constraint changes, and key decisions.
         
-        Strategy F should detect shifts in user messages and update its
-        Protected Core to reflect the current goal state.
+        Strategy F should:
+        1. Detect shifts in user messages and update goal
+        2. Detect constraint changes (budget, timeline, etc.) and update ProtectedCore
+        3. Extract important technical decisions from turns and add to ProtectedCore
         """
         if self.protected_core is None:
             return
         
         current_goal = self.protected_core.current_goal
+        existing_decisions = {d.decision for d in self.protected_core.key_decisions}
         
-        # Scan user messages for goal shifts
+        # Scan all turns for goal shifts, constraint changes, and key decisions
         for turn in context:
+            # Check for goal shifts and constraint changes in user messages
             if turn.get("role") == "user":
                 message = turn.get("content", "")
-                shift_detected = detect_goal_shift_in_message(message)
                 
+                # Check for goal shifts
+                shift_detected = detect_goal_shift_in_message(message)
                 if shift_detected:
-                    # Extract new goal from the shift message
                     new_goal = extract_new_goal_from_message(message, current_goal)
                     if new_goal and new_goal != current_goal:
-                        # Update Protected Core with new goal
                         turn_id = turn.get("id", "?")
                         rationale = f"Goal shift detected in user message at turn {turn_id}"
                         self.update_goal(new_goal, rationale=rationale)
-                        current_goal = new_goal  # Update for subsequent checks
+                        current_goal = new_goal
+                
+                # Check for constraint changes
+                constraint_change = self._detect_constraint_changes(message)
+                if constraint_change:
+                    # Update the relevant constraint
+                    updated_constraints = []
+                    for constraint in self.protected_core.hard_constraints:
+                        if constraint_change['type'] == 'budget' and ('budget' in constraint.lower() or '$' in constraint):
+                            # Replace old budget with new budget
+                            updated_constraints.append(f"Budget: Maximum {constraint_change['new_value']} monthly cloud infrastructure cost")
+                        else:
+                            updated_constraints.append(constraint)
+                    
+                    if updated_constraints != self.protected_core.hard_constraints:
+                        rationale = f"Constraint change detected: {constraint_change['old_value']} -> {constraint_change['new_value']}"
+                        self.update_constraints(updated_constraints, rationale=rationale)
+            
+            # Extract important details from all turns
+            if self._is_important_detail(turn):
+                important_detail = self._extract_important_detail(turn)
+                if important_detail and important_detail not in existing_decisions:
+                    turn_content = turn.get("content", "")
+                    rationale = turn_content[:200] + "..." if len(turn_content) > 200 else turn_content
+                    
+                    decision = Decision(
+                        decision=important_detail,
+                        rationale=rationale,
+                    )
+                    self.protected_core.key_decisions.append(decision)
+                    existing_decisions.add(important_detail)
+                    self.log(f"Added important detail to ProtectedCore: {important_detail[:50]}...")
     
     def compress(
         self,
@@ -252,21 +451,15 @@ class StrategyF_ProtectedCore(CompressionStrategy):
         
         self.log(f"Considering compression of {len(context)} turns up to point {trigger_point}")
 
-        # Get the conversation up to trigger point
         to_compress = context[:trigger_point]
 
         if not to_compress:
             self.log("Nothing to compress")
             return self._format_context_with_protected_core("", [])
 
-        # Detect and handle goal shifts in the context
-        # Strategy F should autonomously detect shifts and update its Protected Core
         self._detect_and_update_goal_shifts(to_compress)
 
-        # Build reconstructed prompt to check token budget
         reconstructed = self.render_reconstructed_prompt(to_compress)
-
-        # Check if we should compress based on token budget
         from evaluation.token_budget import estimate_tokens
         estimated_tokens = estimate_tokens(reconstructed)
         
@@ -276,19 +469,16 @@ class StrategyF_ProtectedCore(CompressionStrategy):
 
         self.log(f"Compressing - prompt tokens ({estimated_tokens} estimated) exceed budget ({self.token_budget.trigger_tokens})")
 
-        # Separate halo (to compress) from recent turns (keep raw)
         split_point = max(0, trigger_point - self.keep_recent_turns)
         halo_to_compress = to_compress[:split_point]
         recent_turns = to_compress[split_point:]
 
-        # Compress only the halo (conversation history, NOT the ProtectedCore)
         if halo_to_compress:
             halo_text = self.format_context(halo_to_compress)
             halo_summary = self._summarize_halo(halo_text)
         else:
             halo_summary = ""
 
-        # Rebuild context with ProtectedCore re-asserted
         compressed = self._format_context_with_protected_core(halo_summary, recent_turns)
 
         original_chars = len(self.format_context(to_compress))
@@ -323,11 +513,9 @@ class StrategyF_ProtectedCore(CompressionStrategy):
         """
         parts = []
         
-        # Add system prompt if present
         if self.system_prompt:
             parts.append(f"System: {self.system_prompt}")
         
-        # PROTECTED CORE - Always first, always authoritative
         decisions_str = "\n".join([
             f"  - {d.decision} (Rationale: {d.rationale})"
             for d in self.protected_core.key_decisions
@@ -352,11 +540,9 @@ If there's any ambiguity, refer back to this Protected Core as the source of tru
         
         parts.append(protected_core_section)
         
-        # Add compressed conversation summary (halo)
         if halo_summary:
             parts.append(f"\n--- Previous Conversation Summary ---\n{halo_summary}")
         
-        # Add recent turns (raw)
         if recent_turns:
             parts.append("\n--- Recent Turns (Raw) ---")
             for turn in recent_turns:
@@ -373,12 +559,9 @@ If there's any ambiguity, refer back to this Protected Core as the source of tru
         
         This is used to check token budgets before actually compressing.
         """
-        # Simulate what the compressed context would look like
         split_point = max(0, len(context) - self.keep_recent_turns)
         halo = context[:split_point]
         recent = context[split_point:]
-        
-        # For token estimation, we use a placeholder summary
         halo_summary = "[Compressed conversation summary would go here]"
         
         return self._format_context_with_protected_core(halo_summary, recent)

@@ -113,22 +113,14 @@ class MockAgent:
         self.original_goal = original_goal
         self.constraints = constraints
         
-        # Initialize strategy
         self.strategy.initialize(original_goal, constraints)
-        
-        # Current context (list of turn dictionaries)
         self.context: List[Dict[str, Any]] = []
-        
-        # Track token usage (approximate)
         self.total_tokens = 0
     
     def add_turn(self, turn: Dict[str, Any]) -> None:
-        """Add a turn to the conversation context."""
         self.context.append(turn)
-        
-        # Approximate token count
-        content = turn.get("content", "")
-        self.total_tokens += len(content) // 4  # ~4 chars per token
+        # Approximate: ~4 chars per token
+        self.total_tokens += len(turn.get("content", "")) // 4
     
     def compress(self, trigger_point: int) -> str:
         """
@@ -138,11 +130,7 @@ class MockAgent:
         """
         compressed = self.strategy.compress(self.context, trigger_point)
         
-        # Reset context to just the compressed version
-        old_tokens = self.total_tokens
         self.total_tokens = len(compressed) // 4
-        
-        # Keep compressed context as a single "summary" turn
         self.context = [{
             "id": 0,
             "role": "system",
@@ -158,25 +146,13 @@ class MockAgent:
         
         The agent responds based on its current context (which may be compressed).
         """
-        # Build messages from context
-        messages = []
-        
-        # Add system prompt
-        messages.append({
-            "role": "system",
-            "content": self.system_prompt
-        })
-        
-        # Add context as user message
         context_text = self._format_current_context()
-        
-        messages.append({
+        messages = [{
             "role": "user",
             "content": f"Context:\n{context_text}\n\n---\n\nQuestion: {prompt}"
-        })
+        }]
         
         try:
-            # Build messages with system prompt
             api_messages = []
             if self.system_prompt:
                 api_messages.append({"role": "system", "content": self.system_prompt})
@@ -248,28 +224,20 @@ def run_single_trial(
         constraints=constraints,
     )
     
-    # Track goal evolution for METRICS ONLY (ground truth for evaluation)
-    # This does NOT influence strategy behavior - strategies handle goal shifts independently
     goal_timeline = track_goal_evolution(turns, original_goal, constraints)
-    
-    # Create metrics collector with goal timeline (for scoring, not strategy behavior)
     collector = MetricsCollector(
         original_goal=original_goal,
         constraints=constraints,
         use_granular_metrics=use_granular_metrics,
-        goal_timeline=goal_timeline,  # Used only for evaluation/scoring
+        goal_timeline=goal_timeline,
     )
     
-    # Run through template turns
-    # NOTE: The harness is neutral - it only orchestrates the evaluation loop.
-    # Strategies handle their own goal tracking, shift detection, and compression decisions.
     compression_point_counter = 0
     
     for turn in turns:
         turn_id = turn["turn_id"]
         print(f"  Turn {turn_id}...", end="")
         
-        # Add turn to agent context (harness just passes data, doesn't interpret)
         agent.add_turn({
             "id": turn_id,
             "role": turn["role"],
@@ -279,15 +247,11 @@ def run_single_trial(
             "decision": turn.get("decision"),
         })
         
-        # Check if this is a compression point
         if turn.get("is_compression_point", False):
             compression_point_counter += 1
             print(f" [COMPRESSION POINT {compression_point_counter}]")
             
-            # Get tokens before compression
             tokens_before = agent.get_token_count()
-            
-            # Probe BEFORE compression
             goal_before = agent.call(probing_tasks.get(
                 "goal_probe",
                 "In one sentence, what is your current goal?"
@@ -297,13 +261,9 @@ def run_single_trial(
                 "What constraints are you operating under?"
             ))
             
-            # Compress
             agent.compress(turn_id)
-            
-            # Get tokens after compression
             tokens_after = agent.get_token_count()
             
-            # Probe AFTER compression
             goal_after = agent.call(probing_tasks.get(
                 "goal_probe",
                 "In one sentence, what is your current goal?"
@@ -313,12 +273,10 @@ def run_single_trial(
                 "What constraints are you operating under?"
             ))
             
-            # Log agent responses for debugging (especially CP1)
             if compression_point_counter == 1:
                 print(f"    [DEBUG CP1] Goal after: {goal_after[:100]}...")
                 print(f"    [DEBUG CP1] Constraints after: {constraints_after[:200]}...")
             
-            # Behavioral test
             behavioral_test = probing_tasks.get("behavioral_test", {})
             behavioral_prompt = behavioral_test.get(
                 "prompt",
@@ -342,7 +300,6 @@ def run_single_trial(
                     None
                 )
             
-            # Collect metrics
             metrics = collector.collect_at_compression_point(
                 compression_point_id=compression_point_counter,
                 turn_id=turn_id,
@@ -364,13 +321,9 @@ def run_single_trial(
         else:
             print(" ok")
     
-    # Get results
     results = collector.get_results()
-    
-    # Extract granular metrics if available
     granular_metrics = results.get("granular_constraint_metrics")
     
-    # Create trial result with granular metrics
     trial_result = TrialResult(
         trial_id=trial_id,
         strategy_name=strategy.name(),
@@ -379,7 +332,6 @@ def run_single_trial(
         summary=results["summary"],
     )
     
-    # Add granular metrics if available (using field assignment since it's optional)
     if granular_metrics:
         trial_result.granular_constraint_metrics = granular_metrics
     
@@ -409,26 +361,18 @@ def run_baseline_evaluation(
     print(f"Trials: {num_trials}")
     print(f"{'='*60}")
     
-    # Load template
     template = load_template(template_path)
-    
-    # Run trials
     trials: List[TrialResult] = []
     
     for trial_id in range(1, num_trials + 1):
-        # Create fresh strategy instance for each trial
         from strategies.strategy_b_codex import StrategyB_CodexCheckpoint
         strategy = StrategyB_CodexCheckpoint(
             system_prompt=template["initial_setup"]["system_prompt"]
         )
-        
         result = run_single_trial(strategy, template, trial_id)
         trials.append(result)
     
-    # Calculate aggregate summary
     aggregate = _calculate_aggregate_summary(trials)
-    
-    # Create results
     results = EvaluationResults(
         strategy_name="Strategy B - Codex-Style Checkpoint",
         template_id=template["template_id"],
@@ -437,7 +381,6 @@ def run_baseline_evaluation(
         aggregate_summary=aggregate,
     )
     
-    # Save results
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(results.to_dict(), f, indent=2)

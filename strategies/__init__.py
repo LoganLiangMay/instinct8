@@ -14,6 +14,14 @@ from .strategy_base import CompressionStrategy, Turn, ToolCall, ProbeResults
 #
 # This lazy import pattern prevents circular dependencies between:
 # - strategies/__init__.py → strategy modules → evaluation module → strategies (cycle!)
+from .strategy_a_naive import StrategyA_NaiveSummarization, create_naive_strategy
+from .strategy_b_codex import StrategyB_CodexCheckpoint, create_codex_strategy
+from .strategy_d_amem import StrategyD_AMemStyle, create_amem_strategy
+from .strategy_f_protected_core import StrategyF_ProtectedCore, create_protected_core_strategy
+from .strategy_g_hybrid import StrategyG_Hybrid, create_hybrid_strategy
+from .strategy_h_selective_salience import SelectiveSalienceStrategy
+from .strategy_h_keyframe import StrategyH_Keyframe, create_keyframe_strategy
+from .strategy_i_hybrid_amem_protected import StrategyI_AMemProtectedCore, create_amem_protected_strategy
 
 __all__ = [
     # Base classes (always available, no circular dependencies)
@@ -33,6 +41,18 @@ __all__ = [
     # Strategy F - Protected Core + Goal Re-assertion
     # "StrategyF_ProtectedCore",  # from strategies.strategy_f_protected_core import StrategyF_ProtectedCore
     # "create_protected_core_strategy",  # from strategies.strategy_f_protected_core import create_protected_core_strategy
+    # Strategy A - Naive Summarization
+    "StrategyA_NaiveSummarization",
+    "create_naive_strategy",
+    # Strategy B - Codex
+    "StrategyB_CodexCheckpoint",
+    "create_codex_strategy",
+    # Strategy D - A-MEM
+    "StrategyD_AMemStyle",
+    "create_amem_strategy",
+    # Strategy F - Protected Core + Goal Re-assertion (Novel)
+    "StrategyF_ProtectedCore",
+    "create_protected_core_strategy",
     # Strategy G - Hybrid GraphRAG
     # "StrategyG_Hybrid",  # from strategies.strategy_g_hybrid import StrategyG_Hybrid
     # "create_hybrid_strategy",  # from strategies.strategy_g_hybrid import create_hybrid_strategy

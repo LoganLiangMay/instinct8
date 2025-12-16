@@ -51,7 +51,7 @@ class StrategyI_AMemProtectedCore(CompressionStrategy):
         keep_recent_turns: int = 3,
         # A-MEM parameters (from Strategy D)
         model_name: str = "all-MiniLM-L6-v2",
-        retrieve_k: int = 10,
+        retrieve_k: int = 20,  # Increased from 10 to better capture category/episode details
         llm_backend: str = "openai",
         llm_model: str = "gpt-4o-mini",
         evo_threshold: int = 100,
@@ -123,6 +123,25 @@ class StrategyI_AMemProtectedCore(CompressionStrategy):
         
         self.log(f"Goal updated in both systems: {new_goal}")
     
+    def update_constraints(self, new_constraints: List[str], rationale: str = "") -> None:
+        """
+        Update constraints in Protected Core.
+        
+        Constraints are automatically detected and updated via _detect_and_update_goal_shifts(),
+        but this method allows explicit updates if needed.
+        """
+        self._protected_core_strategy.update_constraints(new_constraints, rationale)
+        self.log(f"Constraints updated: {new_constraints}")
+    
+    def add_constraint(self, new_constraint: str, rationale: str = "") -> None:
+        """
+        Add a new constraint to Protected Core.
+        
+        Useful when a new constraint is introduced mid-conversation.
+        """
+        self._protected_core_strategy.add_constraint(new_constraint, rationale)
+        self.log(f"Constraint added: {new_constraint}")
+    
     def compress(
         self,
         context: List[Dict[str, Any]],
@@ -162,7 +181,9 @@ class StrategyI_AMemProtectedCore(CompressionStrategy):
         
         if not should_compact(reconstructed, self.token_budget):
             self.log(f"Skipping compression - prompt tokens ({estimated_tokens} estimated) below budget ({self.token_budget.trigger_tokens})")
-            # Still return context with ProtectedCore and memories
+            # Still process context through Protected Core to extract decisions
+            self._protected_core_strategy._detect_and_update_goal_shifts(to_compress)
+            # Return context with ProtectedCore and memories
             protected_core_str = self._get_protected_core_string()
             memories_str = self._get_memories_string(to_compress)
             recent_turns = to_compress[-self.keep_recent_turns:] if len(to_compress) >= self.keep_recent_turns else to_compress
@@ -170,14 +191,25 @@ class StrategyI_AMemProtectedCore(CompressionStrategy):
 
         self.log(f"Compressing - prompt tokens ({estimated_tokens} estimated) exceed budget ({self.token_budget.trigger_tokens})")
 
-        # Step 1: Get ProtectedCore string (from Strategy F)
-        # We need to get the ProtectedCore formatted output
-        # Since Strategy F's compress() does the full compression, we'll extract just the ProtectedCore part
+        # Step 1: Process context through Protected Core to extract decisions and constraint changes
+        # This is CRITICAL - Protected Core needs to scan the context to:
+        # - Extract key decisions from turns (with "decision" fields)
+        # - Detect constraint changes (budget shifts, etc.) and update hard_constraints
+        # - Detect goal shifts and update current_goal
+        # - Update ProtectedCore's key_decisions list
+        # Without this, ProtectedCore won't have the specific technical details or updated constraints!
+        self._protected_core_strategy._detect_and_update_goal_shifts(to_compress)
+        
+        # Step 2: Get ProtectedCore string (now with UPDATED goals, constraints, and decisions)
+        # This includes:
+        # - original_goal (never changes)
+        # - current_goal (updated if goal shifts detected)
+        # - hard_constraints (updated if constraint changes detected)
+        # - key_decisions (updated with extracted technical decisions)
         protected_core_str = self._get_protected_core_string()
         
-        # Step 2: Process turns through A-MEM to build memory
+        # Step 3: Process turns through A-MEM to build memory
         # A-MEM needs to process turns to build its memory system
-        # We'll call A-MEM's compress to let it process, but we'll extract memories separately
         memories_str = self._get_memories_string(to_compress)
         
         # Step 3: Get recent turns (keep raw)
@@ -242,17 +274,30 @@ If there's any ambiguity, refer back to this Protected Core as the source of tru
         try:
             # Process turns to build memory (if not already done)
             # Use A-MEM's internal method to format turns
+            # Include category/episode metadata if available (for hierarchical evaluation)
             for turn in context:
                 turn_content = self._amem_strategy._format_turn_for_memory(turn)
+                
+                # Build tags with hierarchical metadata if available
+                tags = ["conversation", f"turn_{turn.get('id', 'unknown')}"]
+                if turn.get("category"):
+                    tags.append(f"category_{turn.get('category')}")
+                if turn.get("episode"):
+                    tags.append(f"episode_{turn.get('episode')}")
+                if turn.get("decision"):
+                    tags.append("has_decision")
+                
                 self._amem_strategy._memory_system.add_note(
                     content=turn_content,
-                    tags=["conversation", f"turn_{turn.get('id', 'unknown')}"],
+                    tags=tags,
                 )
             
             # Consolidate memories
             self._amem_strategy._memory_system.consolidate_memories()
             
-            # Generate query from recent context (use A-MEM's query generation)
+            # Generate query from context (use A-MEM's query generation)
+            # Use the same approach as A-MEM alone - don't pollute the query with metadata
+            # The tags we added to memories will help retrieval, but the query should focus on content
             query = self._amem_strategy._generate_retrieval_query(context)
             
             # Retrieve relevant memories

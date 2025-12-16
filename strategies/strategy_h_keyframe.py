@@ -52,9 +52,7 @@ class Keyframe:
 
 
 class LLMClient(Protocol):
-    """Protocol for LLM client implementations."""
     def complete(self, prompt: str, max_tokens: int = 500) -> str:
-        """Get completion from LLM."""
         ...
 
 
@@ -192,7 +190,6 @@ class StrategyH_Keyframe(CompressionStrategy):
         self.constraints = constraints
         self.key_decisions = []
         
-        # Create initial keyframe at turn 0
         initial_keyframe = Keyframe(
             turn_id=0,
             goal=original_goal,
@@ -252,23 +249,17 @@ class StrategyH_Keyframe(CompressionStrategy):
         
         self.log(f"Considering compression of {len(context)} turns up to point {trigger_point}")
 
-        # Get the conversation up to trigger point
         to_compress = context[:trigger_point]
 
         if not to_compress:
             self.log("Nothing to compress")
             return self._format_context_with_keyframe(None, "", [])
 
-        # Build reconstructed prompt to check token budget
         reconstructed = self.render_reconstructed_prompt(to_compress)
-
-        # Check if we should compress based on token budget
         from evaluation.token_budget import estimate_tokens
         estimated_tokens = estimate_tokens(reconstructed)
         
         should_compress = should_compact(reconstructed, self.token_budget)
-        
-        # Determine if we should create a new keyframe
         interval_elapsed = (trigger_point - self.last_keyframe_turn) >= self.keyframe_interval
         should_create_keyframe = interval_elapsed or should_compress
         
@@ -278,50 +269,36 @@ class StrategyH_Keyframe(CompressionStrategy):
             self.keyframes.append(new_keyframe)
             self.last_keyframe_turn = trigger_point
             
-            # Trim to keep only last max_keyframes
             if len(self.keyframes) > self.max_keyframes:
                 self.keyframes = self.keyframes[-self.max_keyframes:]
                 self.log(f"Trimmed keyframes, keeping last {self.max_keyframes}")
         
         if not should_compress:
             self.log(f"Skipping compression - prompt tokens ({estimated_tokens} estimated) below budget ({self.token_budget.trigger_tokens})")
-            # Still return context with most recent keyframe
             most_recent_keyframe = self.keyframes[-1] if self.keyframes else None
             return self._format_context_with_keyframe(most_recent_keyframe, "", to_compress[-self.keep_recent_turns:])
 
         self.log(f"Compressing - prompt tokens ({estimated_tokens} estimated) exceed budget ({self.token_budget.trigger_tokens})")
 
-        # Find most recent keyframe before trigger_point
         relevant_keyframe = self._find_most_recent_keyframe(trigger_point)
         
         if relevant_keyframe is None:
-            # Fallback: use most recent keyframe
             relevant_keyframe = self.keyframes[-1] if self.keyframes else None
             self.log("No keyframe found before trigger_point, using most recent")
         
-        # Determine what to compress
         if relevant_keyframe:
-            # Compress content between keyframe and trigger_point
             from_turn = relevant_keyframe.turn_id
-            to_turn = trigger_point
-            
-            # Get turns between keyframe and compression point
-            # Note: from_turn is the keyframe turn_id, which should match the index in to_compress
-            # since to_compress = context[:trigger_point] and keyframes are created at specific turn indices
             split_point = max(0, trigger_point - self.keep_recent_turns)
-            # Only include turns after the keyframe (from_turn + 1) up to split_point
             start_idx = from_turn + 1 if from_turn < len(to_compress) else 0
             inter_keyframe_turns = to_compress[start_idx:split_point] if start_idx < split_point else []
             recent_turns = to_compress[split_point:]
             
-            # Compress inter-keyframe content
             if inter_keyframe_turns:
                 inter_keyframe_text = self.format_context(inter_keyframe_turns)
                 compressed_content = self._compress_between_keyframes(inter_keyframe_text)
             else:
                 compressed_content = ""
         else:
-            # No keyframe found, compress everything except recent turns
             split_point = max(0, trigger_point - self.keep_recent_turns)
             inter_keyframe_turns = to_compress[:split_point]
             recent_turns = to_compress[split_point:]
@@ -332,7 +309,6 @@ class StrategyH_Keyframe(CompressionStrategy):
             else:
                 compressed_content = ""
 
-        # Rebuild context with keyframe
         compressed = self._format_context_with_keyframe(relevant_keyframe, compressed_content, recent_turns)
 
         original_chars = len(self.format_context(to_compress))
@@ -348,7 +324,6 @@ class StrategyH_Keyframe(CompressionStrategy):
         Extracts current goal state, constraints, decisions, and creates
         a brief context snapshot.
         """
-        # Get context snapshot
         context_text = self.format_context(context[-5:]) if len(context) >= 5 else self.format_context(context)
         snapshot = self.client.complete(
             f"{KEYFRAME_SNAPSHOT_PROMPT}\n\nRecent context:\n{context_text}",
@@ -405,11 +380,9 @@ class StrategyH_Keyframe(CompressionStrategy):
         """
         parts = []
         
-        # Add system prompt if present
         if self.system_prompt:
             parts.append(f"System: {self.system_prompt}")
         
-        # Add keyframe if available
         if keyframe:
             decisions_str = "\n".join([
                 f"  - {decision}"
@@ -436,18 +409,15 @@ Content below summarizes what happened after this keyframe."""
             
             parts.append(keyframe_section)
         else:
-            # Fallback if no keyframe available
             parts.append("KEYFRAME: No keyframe available (using current state)")
             if self.current_goal:
                 parts.append(f"Current Goal: {self.current_goal}")
             if self.constraints:
                 parts.append(f"Constraints: {', '.join(self.constraints)}")
         
-        # Add compressed content between keyframes
         if compressed_content:
             parts.append(f"\n--- Compressed Content (Between Keyframes) ---\n{compressed_content}")
         
-        # Add recent turns (raw)
         if recent_turns:
             parts.append("\n--- Recent Turns (Raw) ---")
             for turn in recent_turns:
@@ -464,17 +434,13 @@ Content below summarizes what happened after this keyframe."""
         
         This is used to check token budgets before actually compressing.
         """
-        # Find most recent keyframe
         if context:
             last_turn_id = context[-1].get("id", len(context) - 1)
             relevant_keyframe = self._find_most_recent_keyframe(last_turn_id + 1)
         else:
             relevant_keyframe = self.keyframes[-1] if self.keyframes else None
         
-        # For token estimation, use placeholder compressed content
         compressed_content = "[Compressed content between keyframes would go here]"
-        
-        # Get recent turns
         recent_turns = context[-self.keep_recent_turns:] if len(context) >= self.keep_recent_turns else context
         
         return self._format_context_with_keyframe(relevant_keyframe, compressed_content, recent_turns)
