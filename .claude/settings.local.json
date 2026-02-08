@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone:*)",
+      "Bash(git show-branch:*)",
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Bash(make test:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}

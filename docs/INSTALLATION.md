@@ -1,6 +1,6 @@
 # Instinct8 Agent - Installation Guide
 
-Complete guide to install and use Instinct8 Agent as a Codex replacement.
+Complete guide to install and use Instinct8 Agent.
 
 ## Prerequisites
 
@@ -8,16 +8,28 @@ Complete guide to install and use Instinct8 Agent as a Codex replacement.
 - OpenAI API key
 - Git (for cloning the repository)
 
+## Quick Install (30 seconds)
+
+```bash
+pip install instinct8-agent
+export OPENAI_API_KEY="your-api-key"
+instinct8 "Hello!"
+```
+
 ## Installation Methods
 
 ### Method 1: pip (Recommended)
 
-**Install from PyPI:**
 ```bash
 pip install instinct8-agent
 ```
 
-**Verify installation:**
+On macOS/Linux, you might need:
+```bash
+pip3 install instinct8-agent
+```
+
+Verify installation:
 ```bash
 instinct8 --help
 instinct8-agent --help
@@ -25,7 +37,6 @@ instinct8-agent --help
 
 ### Method 2: pipx (Recommended for CLI Tools)
 
-**Install with pipx (isolated environment):**
 ```bash
 # Install pipx if you don't have it
 brew install pipx  # macOS
@@ -40,7 +51,6 @@ instinct8 --help
 
 ### Method 3: From Source (Development)
 
-**For development or latest features:**
 ```bash
 git clone https://github.com/jjjorgenson/instinct8.git
 cd instinct8
@@ -49,11 +59,13 @@ pip install -e .
 
 This installs Instinct8 Agent and makes the `instinct8` and `instinct8-agent` commands available.
 
-### Step 3: Set Your OpenAI API Key
+## Set Your OpenAI API Key
 
 ```bash
 export OPENAI_API_KEY="your-api-key-here"
 ```
+
+Get your API key from: https://platform.openai.com/api-keys
 
 **To make this permanent**, add it to your shell configuration file:
 
@@ -67,7 +79,7 @@ echo 'export OPENAI_API_KEY="your-api-key-here"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-### Step 4: Verify Installation
+## Verify Installation
 
 ```bash
 # Check that commands are available
@@ -78,11 +90,11 @@ instinct8-agent --help
 instinct8 "Hello, what can you do?"
 ```
 
-If you see help text and a response, installation is successful! ✅
+If you see help text and a response, installation is successful!
 
 ## Quick Start
 
-### Option 1: Use as Codex Replacement
+### Use as Codex Replacement
 
 ```bash
 # Alias Instinct8 to replace Codex
@@ -92,7 +104,7 @@ alias codex=instinct8
 codex exec "create a FastAPI endpoint"
 ```
 
-### Option 2: Use Instinct8 Directly
+### Use Instinct8 Directly
 
 ```bash
 # Basic usage
@@ -102,7 +114,28 @@ instinct8 "create a FastAPI endpoint"
 instinct8 exec "explain this codebase"
 ```
 
-### Option 3: Interactive Agent Mode
+### File Operations (Default)
+
+```bash
+instinct8
+```
+
+File operations work immediately:
+- `review my files` - Read files
+- `create hello.py` - Create files
+- `edit main.py` - Edit files
+
+### Command Execution (Optional)
+
+```bash
+instinct8 --allow-execution
+```
+
+Enables shell command execution:
+- `run npm install` - Run shell commands
+- `execute python test.py` - Execute scripts
+
+### Interactive Agent Mode
 
 ```bash
 instinct8-agent interactive \
@@ -131,8 +164,6 @@ Create `~/.instinct8/config.json`:
   "model": "gpt-4o"
 }
 ```
-
-Now Instinct8 will use these defaults for all commands.
 
 ## Usage Examples
 
@@ -166,7 +197,7 @@ instinct8-agent interactive \
   --constraints "Budget $10K" "Timeline 2 weeks"
 ```
 
-Then use these commands:
+Commands in interactive mode:
 - `ask <question>` - Ask the agent a question
 - `say <message>` - Add a user message
 - `compress` - Manually trigger compression
@@ -185,8 +216,6 @@ instinct8-agent test \
 
 ## Python API Usage
 
-You can also use Instinct8 in your Python code:
-
 ```python
 from selective_salience import Instinct8Agent
 
@@ -203,17 +232,34 @@ response = agent.answer_question("What are we building?")
 print(response)
 ```
 
+## Virtual Environment Setup
+
+On macOS with Homebrew Python, you may need a virtual environment:
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Activate it
+source venv/bin/activate
+
+# Install Instinct8
+pip install instinct8-agent
+```
+
 ## Troubleshooting
 
 ### "Command not found: instinct8"
 
-**Solution:**
 ```bash
-# Make sure you're in the project directory
-cd instinct8
+# Make sure pip install completed successfully
+pip install instinct8-agent
 
-# Reinstall
-pip install -e .
+# Or try pip3
+pip3 install instinct8-agent
+
+# Or use pipx
+pipx install instinct8-agent
 
 # Verify installation
 which instinct8
@@ -221,7 +267,6 @@ which instinct8
 
 ### "OPENAI_API_KEY environment variable not set"
 
-**Solution:**
 ```bash
 export OPENAI_API_KEY="your-api-key-here"
 
@@ -231,33 +276,35 @@ echo $OPENAI_API_KEY
 
 ### "ModuleNotFoundError: No module named 'selective_salience'"
 
-**Solution:**
 ```bash
-# Make sure you're in the project root
+# If installed from source, make sure you're in the project root
 cd instinct8
-
-# Reinstall in development mode
 pip install -e .
 
-# Or install dependencies
+# Or install dependencies first
 pip install -r requirements.txt
 pip install -e .
 ```
 
-### Import Errors
+### "Permission denied"
 
-**Solution:**
 ```bash
-# Install all dependencies
-pip install -r requirements.txt
+# Use virtual environment
+python3 -m venv venv && source venv/bin/activate
+pip install instinct8-agent
 
-# Reinstall package
-pip install -e .
+# Or use pipx
+pipx install instinct8-agent
+```
+
+### Import Errors (v0.1.0)
+
+```bash
+# Upgrade to latest version
+pip install --upgrade instinct8-agent
 ```
 
 ## Updating
-
-If you already have Instinct8 Agent installed:
 
 ```bash
 # Upgrade to latest version
@@ -280,19 +327,6 @@ pip uninstall instinct8-agent
 rm -rf ~/.instinct8
 ```
 
-## Next Steps
-
-- Read the [Quick Start Guide](QUICKSTART.md)
-- See [Codex Replacement Guide](docs/CODEX_REPLACEMENT.md) for migration details
-- Check [Examples](examples/) for more usage patterns
-- Read the [Full Documentation](selective_salience/README.md)
-
-## Getting Help
-
-- Check the [README](README.md) for project overview
-- See [Troubleshooting](#troubleshooting) section above
-- Open an issue on GitHub: https://github.com/jjjorgenson/instinct8/issues
-
 ## What Makes Instinct8 Different?
 
 **Codex's compression** uses simple summarization - it may lose goal-critical information.
@@ -304,6 +338,14 @@ rm -rf ~/.instinct8
 
 **Result**: Better goal coherence and constraint retention in long conversations!
 
----
+## Next Steps
 
-**Ready to get started?** Run `instinct8 "Hello!"` to test your installation! 🚀
+- See [features/CODEX_REPLACEMENT.md](features/CODEX_REPLACEMENT.md) for migration details
+- Check [examples/](../examples/) for more usage patterns
+- Read the [Full Documentation](../selective_salience/README.md)
+
+## Getting Help
+
+- Check the [README](../README.md) for project overview
+- See [Troubleshooting](#troubleshooting) section above
+- Open an issue on GitHub: https://github.com/jjjorgenson/instinct8/issues

@@ -25,26 +25,54 @@ Our baseline evaluation (50-turn conversations, 5 compression points) shows:
 ## Project Structure
 
 ```
-codexcode/
-├── codex/                    # Codex source code (for reference)
-│   └── codex-rs/core/src/
-│       └── compact.rs        # Original Codex compression logic
-├── strategies/               # Compression strategy implementations
-│   ├── strategy_base.py     # Abstract base class
-│   └── strategy_b_codex.py  # Codex-style checkpoint (baseline)
-├── evaluation/               # Evaluation framework
-│   ├── metrics.py           # Goal coherence, constraint recall, behavioral alignment
-│   └── harness.py           # Trial runner and CLI
-├── templates/                # Conversation templates
-│   ├── research-synthesis-001.json      # 12-turn template
-│   └── research-synthesis-002-long.json # 50-turn template
-├── results/                  # Evaluation results
-│   ├── baseline_results.json
-│   └── baseline_long_results.json
-└── docs/                     # Documentation
-    ├── codex_analysis.md    # Codex compression algorithm analysis
-    └── baseline_results.md  # Baseline findings report
+instinct8/
+├── README.md                    # This file
+├── CHANGELOG.md                 # Version history
+├── pyproject.toml / Makefile / requirements.txt / LICENSE
+├── selective_salience/          # Core Python package
+├── strategies/                  # 9+ compression strategies
+├── evaluation/                  # Evaluation framework
+├── tests/                       # Unit tests
+├── templates/                   # 22 conversation templates
+├── results/                     # Evaluation results
+├── examples/                    # Usage examples
+├── scripts/                     # Evaluation & utility scripts
+├── data/                        # External datasets
+├── Formula/                     # Homebrew formula
+├── codex/                       # Full Codex source (reference)
+├── versions/                    # Version variant descriptions
+│   ├── v1-core/                # Python selective salience (main)
+│   ├── v2-graphrag/            # GraphRAG + MCP server (graphrag-rs)
+│   └── v3-sfhm/               # Rust SFHM backend (sfhm)
+├── archive/                     # Historical planning docs
+│   └── PR_PARTY/
+└── docs/                        # Documentation
+    ├── INSTALLATION.md          # Installation guide
+    ├── PUBLISHING.md            # PyPI publishing guide
+    ├── CODEX_FORK_PACKAGING.md  # Codex repackaging guide
+    ├── TESTING.md               # Testing documentation
+    ├── CODE_PROTECTION.md
+    ├── PRIVATE_API_SETUP.md
+    ├── features/                # Feature documentation
+    ├── presentations/           # Presentation materials
+    ├── research/                # Research & analysis docs
+    └── development/             # Development guides
 ```
+
+## Branch Map
+
+| Branch | Purpose | Status |
+|--------|---------|--------|
+| `main` | Production — Python-based selective salience | Active, v0.4.2, on PyPI |
+| `feature/package-selective-salience` | PyPI packaging | Partially merged |
+| `feature/pr01-selective-salience` | PR#01 enhancements, presentations | Feature branch |
+| `feature/strategy-i-hybrid-implementation` | Strategy I (A-MEM + Protected Core) | Feature branch |
+| `feature/h-mem` | Hierarchical Memory (H-MEM) implementation | Feature branch |
+| `feature/instinct8-goal-preservation` | Goal preservation framework | Merged |
+| `sfhm` | Rust-only backend, Stateless Functional Hierarchical Memory | Experimental |
+| `graphrag-rs` | GraphRAG memory + MCP server integration | Experimental, ~30 commits ahead |
+
+See [versions/](versions/) for detailed descriptions of each product variant.
 
 ## Quick Start
 
@@ -94,7 +122,7 @@ alias codex=instinct8
 codex exec "create a FastAPI endpoint"
 ```
 
-**See [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) for complete installation instructions.**
+**See [docs/INSTALLATION.md](docs/INSTALLATION.md) for complete installation instructions.**
 
 ### Run Baseline Evaluation
 
@@ -262,10 +290,11 @@ See `templates/research-synthesis-001.json` for example.
 
 ## Documentation
 
-- **[Codex Compression Analysis](docs/codex_analysis.md)**: Deep dive into Codex's `compact.rs` algorithm
-- **[Baseline Results Report](docs/baseline_results.md)**: Detailed analysis of goal drift findings
-- **[Implementation Guide](implementation_guide.md)**: Technical specifications
-- **[Project PRD](context_compression_prd.md)**: Full project requirements
+- **[Codex Compression Analysis](docs/research/codex_analysis.md)**: Deep dive into Codex's `compact.rs` algorithm
+- **[Baseline Results Report](docs/research/baseline_results.md)**: Detailed analysis of goal drift findings
+- **[Implementation Guide](docs/research/implementation_guide.md)**: Technical specifications
+- **[Project PRD](docs/research/context_compression_prd.md)**: Full project requirements
+- **[CHANGELOG](CHANGELOG.md)**: Version history
 
 ## License
 
