@@ -1,0 +1,51 @@
+{
+  "name": "instinct8",
+  "version": "0.1.0",
+  "description": "Context compression with goal drift prevention for LLM agents",
+  "repository": "https://github.com/logankud/instinct8",
+  "homepage": "https://github.com/logankud/instinct8",
+  "license": "BSL-1.1",
+  "runtime": "python",
+  "command": "instinct8-mcp",
+  "transport": "stdio",
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true,
+    "sampling": true
+  },
+  "tools": [
+    {
+      "name": "initialize_session",
+      "description": "Set up protected core with goal and constraints"
+    },
+    {
+      "name": "compress_context",
+      "description": "Compress conversation while preserving goals (uses MCP sampling)"
+    },
+    {
+      "name": "measure_drift",
+      "description": "Quantify goal coherence after compression (uses MCP sampling)"
+    }
+  ],
+  "resources": [
+    {
+      "uri": "session://current",
+      "description": "Current session state"
+    },
+    {
+      "uri": "strategies://list",
+      "description": "Available compression strategies"
+    }
+  ],
+  "prompts": [
+    {
+      "name": "selective_salience_extract",
+      "description": "Template for extracting goal-critical info from context"
+    },
+    {
+      "name": "protected_core_compress",
+      "description": "Template for compressing with Protected Core pattern"
+    }
+  ]
+}

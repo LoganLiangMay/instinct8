@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "instinct8-mcp"
+version = "0.1.0"
+description = "MCP server for context compression with goal drift prevention"
+readme = "README.md"
+license = {file = "LICENSE-BSL"}
+requires-python = ">=3.10"
+authors = [
+    { name = "Logan Kirkland" },
+]
+keywords = ["mcp", "context-compression", "llm", "goal-drift", "agents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "mcp>=1.0.0",
+]
+
+[project.scripts]
+instinct8-mcp = "instinct8_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/logankud/instinct8"
+Repository = "https://github.com/logankud/instinct8"
+
+[tool.hatch.build.targets.wheel]
+packages = ["instinct8_mcp"]
