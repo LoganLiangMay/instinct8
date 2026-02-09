@@ -16,10 +16,15 @@ Key Characteristics:
 - Optional goal/constraint preservation (instinct8 enhancement)
 """
 
+from __future__ import annotations
+
 import os
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol, TYPE_CHECKING
 
 from .strategy_base import CompressionStrategy
+
+if TYPE_CHECKING:
+    from evaluation.token_budget import TokenBudget
 
 # Lazy import to avoid circular dependency with evaluation module
 # TokenBudget, should_compact, and BUDGET_8K imported where needed

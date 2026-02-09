@@ -39,7 +39,7 @@ instinct8/
 ├── scripts/                     # Evaluation & utility scripts
 ├── data/                        # External datasets
 ├── Formula/                     # Homebrew formula
-├── codex/                       # Full Codex source (reference)
+├── codex/                       # Codex source (git submodule, pinned to v0.98.0)
 ├── versions/                    # Version variant descriptions
 │   ├── v1-core/                # Python selective salience (main)
 │   ├── v2-graphrag/            # GraphRAG + MCP server (graphrag-rs)
@@ -109,6 +109,7 @@ For development or latest features:
 ```bash
 git clone https://github.com/jjjorgenson/instinct8.git
 cd instinct8
+git submodule update --init
 pip install -e .
 ```
 
@@ -154,8 +155,14 @@ Use `make` commands for easy testing and evaluation:
 # See all available commands
 make help
 
-# Run unit tests (~10s)
+# Run all tests (~10s)
 make test
+
+# Unit tests only — no API keys needed
+make test-quick
+
+# Integration tests only — requires API keys
+make test-integration
 
 # Quick evaluation - 5 samples (~2m)
 make eval-quick

@@ -9,6 +9,10 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "integration: requires LLM API keys")
+
+
 @pytest.fixture
 def sample_conversation():
     """Sample conversation for testing compression strategies."""

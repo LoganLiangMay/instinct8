@@ -1,7 +1,7 @@
 # instinct8 - Tests and Evaluations
 # Run 'make help' to see available commands
 
-.PHONY: help test eval-quick eval-full eval-hierarchical eval-compare eval-rigorous eval-binary eval-all clean
+.PHONY: help test test-quick test-integration eval-quick eval-full eval-hierarchical eval-compare eval-rigorous eval-binary eval-all clean
 
 # Default target
 help:
@@ -10,7 +10,9 @@ help:
 	@echo "=================================="
 	@echo ""
 	@echo "Unit Tests:"
-	@echo "  make test              Run all unit tests (~10s)"
+	@echo "  make test              Run all tests (~10s)"
+	@echo "  make test-quick        Fast unit tests only, no API keys needed"
+	@echo "  make test-integration  API-dependent integration tests only"
 	@echo ""
 	@echo "Quick Evaluations:"
 	@echo "  make eval-quick        Quick eval - 5 samples (~2m)"
@@ -37,12 +39,16 @@ help:
 # =============================================================================
 
 test:
-	@echo "Running unit tests..."
+	@echo "Running all tests..."
 	pytest tests/ -v
 
 test-quick:
-	@echo "Running quick tests..."
-	pytest tests/ -v -x --tb=short
+	@echo "Running quick tests (skipping integration)..."
+	pytest tests/ -v -x --tb=short -m "not integration"
+
+test-integration:
+	@echo "Running integration tests (requires API keys)..."
+	pytest tests/ -v -m "integration"
 
 # =============================================================================
 # QUICK EVALUATIONS (< 5 minutes)

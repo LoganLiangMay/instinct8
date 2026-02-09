@@ -26,7 +26,9 @@ Choose the right evaluation for your use case:
 
 | Use Case | Command | Time | Description |
 |----------|---------|------|-------------|
-| Development testing | `make test` | ~10s | Unit tests only |
+| Development testing | `make test` | ~10s | All tests |
+| Unit tests only | `make test-quick` | ~5s | Skips integration (no API keys needed) |
+| Integration tests | `make test-integration` | ~5m | API-dependent tests only |
 | Quick sanity check | `make eval-quick` | ~2m | 5 samples, basic metrics |
 | Hierarchical testing | `make eval-hierarchical` | ~5m | Domain/category/episode recall |
 | Full benchmark | `make eval-full` | ~30m | All LoCoMo samples |
@@ -182,22 +184,37 @@ results/
 
 ### Running Tests
 ```bash
-# All tests
-pytest tests/ -v
+# All tests (unit + integration)
+make test
+
+# Unit tests only — no API keys required
+make test-quick
+
+# Integration tests only — requires OPENAI_API_KEY or ANTHROPIC_API_KEY
+make test-integration
 
 # Specific test file
 pytest tests/test_hierarchical_eval.py -v
-
-# Quick mode (stop on first failure)
-pytest tests/ -v -x --tb=short
 ```
 
-### Test Coverage
-| Test File | Coverage |
-|-----------|----------|
-| `test_metrics.py` | Basic metric imports |
-| `test_strategies.py` | Strategy instantiation |
-| `test_hierarchical_eval.py` | Template validation, metric calculation |
+### Test Files
+| Test File | Type | Description |
+|-----------|------|-------------|
+| `test_metrics.py` | Unit | Metric calculator imports |
+| `test_strategies.py` | Unit | Strategy interfaces (A, B) |
+| `test_granular_constraint_metrics.py` | Unit | Constraint categorization |
+| `test_artificial_8k_compaction_trigger.py` | Unit | Token budget triggers |
+| `test_strategy_h.py` | Unit | Strategy H (mocked) |
+| `test_hierarchical_eval.py` | Unit | Hierarchical template validation |
+| `test_granular_collection.py` | Unit | Granular metrics collection |
+| `test_selective_salience_package.py` | Integration | Package API |
+| `test_strategy_h_integration.py` | Integration | Strategy H full flow |
+| `test_budget_judge.py` | Integration | LLM-as-judge accuracy |
+| `test_strategy_f_product_pivot.py` | Integration | Strategy F on multi-shift template |
+| `test_strategy_i_product_design.py` | Integration | Strategy I on healthcare template |
+| `test_with_actual_compression.py` | Integration | Compression trigger + constraint retention |
+
+Integration tests are marked with `@pytest.mark.integration` and skipped automatically by `make test-quick`.
 
 ---
 
