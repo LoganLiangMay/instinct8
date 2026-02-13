@@ -22,7 +22,60 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0.0", "pytest-asyncio>=0.21.0", "mypy>=1.0.0"]
+# Development tools
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+# Evaluation and LLM providers (for research and A-MEM experiments)
+eval = [
+    "anthropic>=0.18.0",
+    "litellm>=1.50.0",
+]
+
+# Evaluation metrics (for benchmarking compression strategies)
+metrics = [
+    "bert-score>=0.3.13",
+    "rouge-score>=0.1.2",
+    "nltk>=3.8.0",
+]
+
+# Data processing utilities
+data = [
+    "pandas>=2.0.0",
+    "scipy>=1.10.0",
+    "tqdm>=4.65.0",
+    "dataclasses-json>=0.6.0",
+]
+
+# Heavy ML dependencies (optional - sentence-transformers can use lighter backends)
+# Only needed for specific embedding models or evaluation
+heavy = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+]
+
+# Complete development environment with all optional dependencies
+all = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "anthropic>=0.18.0",
+    "litellm>=1.50.0",
+    "bert-score>=0.3.13",
+    "rouge-score>=0.1.2",
+    "nltk>=3.8.0",
+    "pandas>=2.0.0",
+    "scipy>=1.10.0",
+    "tqdm>=4.65.0",
+    "dataclasses-json>=0.6.0",
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+]
 
 [project.scripts]
 instinct8-agent = "selective_salience.agent_cli:main"

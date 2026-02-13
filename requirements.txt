@@ -1,39 +1,20 @@
-# Context Compression Middleware - Dependencies
+# Instinct8 Agent - Dependency Management
+#
+# This project uses pyproject.toml as the source of truth for dependencies.
+# For different installation scenarios, use:
+#
+# MINIMAL INSTALL (core CLI functionality only):
+#   pip install -e .
+#
+# DEVELOPMENT (includes testing tools):
+#   pip install -e ".[dev]"
+#
+# EVALUATION (includes LLM providers and metrics):
+#   pip install -e ".[eval,metrics,data]"
+#
+# FULL INSTALL (all dependencies including heavy ML frameworks):
+#   pip install -e ".[all]"
+#
+# For CI/CD or automated environments, you can install with all dependencies:
 
-# Core
-numpy>=1.24.0
-scipy>=1.10.0
-scikit-learn>=1.2.0
-
-# LLM API clients
-anthropic>=0.18.0
-openai>=1.0.0
-litellm>=1.50.0
-
-# NLP & Embeddings
-sentence-transformers>=2.2.0
-transformers>=4.30.0
-torch>=2.0.0
-nltk>=3.8.0
-
-# Evaluation metrics
-rouge-score>=0.1.2
-bert-score>=0.3.13
-
-# Data handling
-dataclasses-json>=0.6.0
-pandas>=2.0.0
-tqdm>=4.65.0
-
-# Token estimation
-tiktoken>=0.5.0
-
-# Testing
-pytest>=7.0.0
-pytest-asyncio>=0.21.0
-
-# Utilities
-python-dotenv>=1.0.0
-
-# Type checking (optional)
-mypy>=1.0.0
+-e .[all]

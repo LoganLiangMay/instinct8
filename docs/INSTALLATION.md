@@ -54,8 +54,36 @@ instinct8 --help
 ```bash
 git clone https://github.com/jjjorgenson/instinct8.git
 cd instinct8
+git submodule update --init
+
+# Choose your installation level:
+
+# Minimal install (core CLI only - ~50MB)
 pip install -e .
+
+# Development install (includes testing tools)
+pip install -e ".[dev]"
+
+# Full install (all dependencies for evaluation and research - ~2GB)
+pip install -e ".[all]"
 ```
+
+**Installation Options:**
+
+| Command | Use Case | Dependencies |
+|---------|----------|--------------|
+| `pip install -e .` | **End users** - Core CLI functionality only | Minimal (openai, numpy, sentence-transformers, scikit-learn, tiktoken) |
+| `pip install -e ".[dev]"` | **Contributors** - Adds testing tools | Core + pytest, mypy, python-dotenv |
+| `pip install -e ".[eval]"` | **Researchers** - LLM providers for evaluation | Core + anthropic, litellm |
+| `pip install -e ".[metrics]"` | **Evaluators** - Metrics for benchmarking | Core + BERT-score, ROUGE, nltk |
+| `pip install -e ".[data]"` | **Data scientists** - Data processing utilities | Core + pandas, scipy, tqdm |
+| `pip install -e ".[heavy]"` | **ML engineers** - Heavy ML frameworks | Core + torch, transformers (~1.5GB) |
+| `pip install -e ".[all]"` | **Full development** - Everything | All of the above (~2GB) |
+
+**Recommended Installations:**
+- **Quick start / testing**: `pip install -e .` (minimal, ~50MB, installs in 30 seconds)
+- **Development work**: `pip install -e ".[dev]"` (adds testing tools)
+- **Evaluation / research**: `pip install -e ".[all]"` (complete environment)
 
 This installs Instinct8 Agent and makes the `instinct8` and `instinct8-agent` commands available.
 
@@ -279,12 +307,15 @@ echo $OPENAI_API_KEY
 ```bash
 # If installed from source, make sure you're in the project root
 cd instinct8
+
+# Install with pip (dependencies are managed by pyproject.toml)
 pip install -e .
 
-# Or install dependencies first
-pip install -r requirements.txt
-pip install -e .
+# Or install with all dependencies
+pip install -e ".[all]"
 ```
+
+**Note**: `requirements.txt` now points to `pyproject.toml`, so `pip install -e .` is the recommended approach.
 
 ### "Permission denied"
 

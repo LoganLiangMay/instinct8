@@ -39,6 +39,7 @@ instinct8/
 ├── scripts/                     # Evaluation & utility scripts
 ├── data/                        # External datasets
 ├── Formula/                     # Homebrew formula
+├── mcp_server/                  # MCP server for Claude Code integration
 ├── codex/                       # Codex source (git submodule, pinned to v0.98.0)
 ├── versions/                    # Version variant descriptions
 │   ├── v1-core/                # Python selective salience (main)
@@ -103,6 +104,43 @@ If you already have Instinct8 Agent installed:
 pip install --upgrade instinct8-agent
 ```
 
+## MCP Server for Claude Code
+
+Use instinct8's context compression directly in Claude Code through the Model Context Protocol (MCP).
+
+### Install MCP Server
+
+```bash
+pip install instinct8-mcp
+```
+
+### Configure Claude Code
+
+Add to your Claude Code config (`~/.claude/claude_code_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "instinct8": {
+      "command": "instinct8-mcp"
+    }
+  }
+}
+```
+
+Restart Claude Code and you'll have access to:
+- **`initialize_session`** - Set goal and constraints to protect during compression
+- **`compress_context`** - Intelligently compress conversations while preserving goals
+- **`measure_drift`** - Quantify if compression affected your original objectives
+
+**Key Benefits:**
+- No API keys needed (uses Claude's model via MCP sampling)
+- Lightweight (~50KB, no heavy ML dependencies)
+- Scientifically validated approach (7% avg drift reduction)
+- All processing stays local on your machine
+
+See [mcp_server/README.md](mcp_server/README.md) for detailed MCP server documentation.
+
 ### Alternative: Install from Source
 
 For development or latest features:
@@ -110,8 +148,25 @@ For development or latest features:
 git clone https://github.com/jjjorgenson/instinct8.git
 cd instinct8
 git submodule update --init
+
+# Minimal install (core CLI only)
 pip install -e .
+
+# Development install (includes testing tools)
+pip install -e ".[dev]"
+
+# Full install (all dependencies for evaluation and research)
+pip install -e ".[all]"
 ```
+
+**Installation Options:**
+- `pip install -e .` - Core functionality only (minimal dependencies)
+- `pip install -e ".[dev]"` - Adds testing tools (pytest, mypy)
+- `pip install -e ".[eval]"` - Adds LLM providers for evaluation (anthropic, litellm)
+- `pip install -e ".[metrics]"` - Adds evaluation metrics (BERT-score, ROUGE)
+- `pip install -e ".[data]"` - Adds data processing utilities (pandas, scipy)
+- `pip install -e ".[heavy]"` - Adds heavy ML frameworks (torch, transformers)
+- `pip install -e ".[all]"` - Install everything (recommended for development)
 
 ### Use as Codex Replacement
 
