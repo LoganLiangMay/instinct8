@@ -22,6 +22,44 @@ Our baseline evaluation (50-turn conversations, 5 compression points) shows:
 
 **This validates the need for explicit goal protection mechanisms.**
 
+## 🚀 Quick Start
+
+### For Claude Code Users (5 minutes)
+
+```bash
+# 1. Install
+pip install instinct8-mcp
+
+# 2. Configure (~/.claude/claude_code_config.json)
+{
+  "mcpServers": {
+    "instinct8": {
+      "command": "instinct8-mcp"
+    }
+  }
+}
+
+# 3. Restart Claude Code
+
+# 4. Test it!
+"Initialize a session with goal 'Build a TODO app'"
+"Compress our conversation"
+"What was our goal?"
+```
+
+**[Full Setup Guide →](mcp_server/QUICKSTART.md)** | **[Troubleshooting →](mcp_server/TROUBLESHOOTING.md)** | **[FAQ →](mcp_server/FAQ.md)**
+
+### For Developers (Standalone CLI)
+
+```bash
+# Install
+pip install instinct8-agent
+
+# Use
+export OPENAI_API_KEY="your-key"
+instinct8 "Create a FastAPI endpoint"
+```
+
 ## Project Structure
 
 ```
@@ -139,13 +177,24 @@ Restart Claude Code and you'll have access to:
 - Scientifically validated approach (7% avg drift reduction)
 - All processing stays local on your machine
 
-See [mcp_server/README.md](mcp_server/README.md) for detailed MCP server documentation.
+**Getting Started:**
+- **[5-Minute Setup](mcp_server/QUICKSTART.md)** - Get running quickly
+- **[Hello World Test](mcp_server/examples/hello_world.md)** - 60-second verification
+- **[Troubleshooting](mcp_server/TROUBLESHOOTING.md)** - Solve common issues
+- **[FAQ](mcp_server/FAQ.md)** - Frequently asked questions
+- **[Full Documentation](mcp_server/README.md)** - Complete MCP server details
+
+**Note:** If `pip install instinct8-mcp` fails, the package may not be published yet. Install from source:
+```bash
+git clone https://github.com/LoganLiangMay/instinct8.git
+cd instinct8/mcp_server && pip install -e .
+```
 
 ### Alternative: Install from Source
 
 For development or latest features:
 ```bash
-git clone https://github.com/jjjorgenson/instinct8.git
+git clone https://github.com/LoganLiangMay/instinct8.git
 cd instinct8
 git submodule update --init
 

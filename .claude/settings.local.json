@@ -2,12 +2,29 @@
   "permissions": {
     "allow": [
       "Bash(git clone:*)",
-      "Bash(git show-branch:*)",
-      "Bash(wc:*)",
-      "Bash(ls:*)",
-      "Bash(make test:*)",
-      "Bash(python3 -m pytest:*)",
-      "Bash(python3:*)"
-    ]
+      "Bash(pytest:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 list:*)",
+      "Bash(find:*)",
+      "Bash(pip show:*)",
+      "Bash(python:*)",
+      "Bash(pip search:*)",
+      "WebSearch",
+      "WebFetch(domain:pypi.org)",
+      "Bash(pip3 install:*)",
+      "Bash(=1.0.0)",
+      "Bash(git fetch:*)",
+      "Bash(git push:*)",
+      "Bash(git remote set-url:*)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(env)",
+      "Bash(git config:*)",
+      "Bash(gh auth:*)",
+      "Bash(gh repo view:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
   }
 }

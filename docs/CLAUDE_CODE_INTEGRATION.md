@@ -32,7 +32,7 @@ pip install instinct8-mcp
 
 Or install from source:
 ```bash
-git clone https://github.com/jjjorgenson/instinct8.git
+git clone https://github.com/LoganLiangMay/instinct8.git
 cd instinct8/mcp_server
 pip install -e .
 ```
@@ -303,7 +303,7 @@ instinct8 works alongside other MCP servers. You can combine it with:
 
 ## Getting Help
 
-- **GitHub Issues**: https://github.com/jjjorgenson/instinct8/issues
+- **GitHub Issues**: https://github.com/LoganLiangMay/instinct8/issues
 - **Documentation**: [Main README](../README.md) | [MCP Server README](../mcp_server/README.md)
 - **Examples**: See [Common Use Cases](#common-use-cases) above
 

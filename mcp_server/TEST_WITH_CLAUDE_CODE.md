@@ -208,7 +208,7 @@ If you encounter problems:
 1. Note the exact error message
 2. Save Claude Code logs
 3. Check the Python console output
-4. Report at: https://github.com/jjjorgenson/instinct8/issues
+4. Report at: https://github.com/LoganLiangMay/instinct8/issues
 
 Include:
 - Claude Code version
